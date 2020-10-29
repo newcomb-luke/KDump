@@ -7,7 +7,7 @@ mod argument;
 mod opcode;
 
 use argument::{Argument, read_argument, argument_type_string};
-use opcode::{read_all_sections, SectionType, get_instr_mnemonic, Instr};
+use opcode::{read_all_sections, SectionType, get_instr_mnemonic, Instr, CodeSection, DebugSection};
 
 pub static VERSION:&'static str = "1.0.0";
 
@@ -18,7 +18,7 @@ enum FileType {
 }
 
 pub fn run(matches: ArgMatches) -> Result<(), Box<dyn Error>> {
-    println!("kDump version {}\n", VERSION);
+    println!("kDump version {}", VERSION);
 
     let filename = matches.value_of("INPUT").unwrap();
     let raw_contents = fs::read(filename)?;
@@ -38,6 +38,140 @@ pub fn run(matches: ArgMatches) -> Result<(), Box<dyn Error>> {
     }
 }
 
+fn dump_arg_section(args_list: &Vec<Argument>, map_arg_to_index: &HashMap<i32, i32>)
+{
+    println!("\nArgument section:");
+    println!("  {:<12}{:<24}{}", "Type", "Value", "Index");
+
+    for i in 0..args_list.len() {
+        println!("  {:<12}{:<24}{:>}", argument_type_string(&args_list[i]), args_list[i].to_string(), map_arg_to_index.get(&(i as i32)).unwrap());
+    }
+}
+
+fn dump_ksm_info(args_list: &Vec<Argument>)
+{
+    println!("\nKSM File Info:");
+
+    let msg: String = match args_list.get(0) {
+        Some(arg) => {
+            match arg {
+                Argument::String(_) => String::from("  Compiled using internal kOS compiler."),
+                Argument::Int32(i) => {
+
+                    let mut e = *i;
+
+                    let compiler = e / 0x1000;
+                    e %= 0x1000;
+                    let major_version = e / 0x0100;
+                    e %= 0x0100;
+                    let minor_version = e / 0x0010;
+                    e %= 0x0010;
+                    let patch_version = e;
+            
+                    let compiler_name = match compiler {
+                        0 => "Unknown 3rd party compiler.",
+                        1 => "Unknown 3rd party compiler.",
+                        2 => "KASM",
+                        3 => "KerbalC",
+                        4 => "Gravitas",
+                        5 => "Unofficial external KerbalScript compiler",
+                        _ => "Compiler unrecognized. Please update this tool. If there is no updated, contact the developer.",
+                    };
+            
+                    format!("  Compiled using: {} version {}.{}.{}", compiler_name, major_version, minor_version, patch_version)
+                    
+                }
+                _ => String::from("  Unknown compiler. Consider updating this tool version or contacting the developer.")
+            }
+        },
+        None => {
+            String::from("  Unknown compiler. Not enough data.")
+        }
+    };
+
+    println!("{}", msg);
+}
+
+fn dump_ksm_disassemble(ksm_code_sections_result: &Vec<CodeSection>, index_bytes: i32, args_list: &Vec<Argument>, map_index_to_arg: &HashMap<i32, i32>, show_addresses: bool, show_raw_insn: bool) {
+    let mut current_instr_address = 1;
+
+    for section in ksm_code_sections_result.iter() {
+        println!("\n{}:", match section.section_type {
+            SectionType::FUNCTION => "FUNCTION",
+            SectionType::INITIALIZATION => "INITIALIZATION",
+            SectionType::MAIN => "MAIN"
+        });
+
+        for instr in &section.instructions {
+
+            let opcode: u8;
+            let num_operands;
+            let mut ops: Vec<i32> = Vec::new();
+
+            match instr {
+                Instr::NoOperand(op) => {
+                    opcode = *op;
+                    num_operands = 0;
+                },
+                Instr::SingleOperand(op, o1) => {
+                    opcode = *op;
+                    ops.push(*o1);
+                    num_operands = 1;
+                },
+                Instr::DoubleOperand(op, o1, o2) => {
+                    opcode = *op;
+                    ops.push(*o1);
+                    ops.push(*o2);
+                    num_operands = 2;
+                }
+            };
+
+            print!("  ");
+
+            if show_addresses {
+                print!("{:06x}  ", current_instr_address);
+            }
+
+            if show_raw_insn {
+
+                let mut raw_instr_str = String::new();
+
+                raw_instr_str.push_str(&format!("{:04x} ", opcode));
+
+                for operand in &ops {
+                    raw_instr_str.push_str(&match index_bytes {
+                        1 => format!("{:04x} ", *operand as u16),
+                        2 => format!("{:04x} ", *operand as u16),
+                        3 => format!("{:02x}{:04x} ", (*operand / 0x100) as u8, (*operand % 0x100) as u16),
+                        4 => format!("{:06x} ", *operand),
+                        _ => String::from("ERROR! You have way too many arguments")
+                    });
+                }
+
+                print!("{:<20} ", raw_instr_str);
+            }
+
+            print!("{:<5}", get_instr_mnemonic(opcode));
+
+            let mut current_operand = 0;
+            for operand in &ops {
+                print!(" {}", args_list[*map_index_to_arg.get(operand).unwrap() as usize]);
+
+                current_operand += 1;
+
+                if current_operand < num_operands {
+                    print!(",");
+                }
+            }
+
+            println!("");
+
+            current_instr_address += 1;
+        }
+        println!("");
+    }
+}
+
 fn dump_ksm(matches: ArgMatches, raw_contents: Vec<u8>) -> Result<(), Box<dyn Error>> {
 
     let mut decoder = GzDecoder::new(&raw_contents[..]);
@@ -45,59 +179,8 @@ fn dump_ksm(matches: ArgMatches, raw_contents: Vec<u8>) -> Result<(), Box<dyn Er
 
     decoder.read_to_end(&mut decompressed)?;
 
-    if matches.is_present("info")
-    {
-        let mut args_list: Vec<Argument> = Vec::new();
-        let mut map_index_to_arg: HashMap<i32, i32> = HashMap::new();
-        let mut map_arg_to_index: HashMap<i32, i32> = HashMap::new();
-        let mut contents_iter = decompressed.iter().peekable();
-
-        read_arguments(&mut contents_iter, &mut args_list, &mut map_index_to_arg, &mut map_arg_to_index)?;
-
-        println!("KSM File Info:");
-
-        let msg: String = match args_list.get(0) {
-            Some(arg) => {
-                match arg {
-                    Argument::String(_) => String::from("  Compiled using internal kOS compiler."),
-                    Argument::Int32(i) => {
-
-                        let mut e = *i;
-
-                        let compiler = e / 0x1000;
-                        e %= 0x1000;
-                        let major_version = e / 0x0100;
-                        e %= 0x0100;
-                        let minor_version = e / 0x0010;
-                        e %= 0x0010;
-                        let patch_version = e;
-                
-                        let compiler_name = match compiler {
-                            0 => "Unknown 3rd party compiler.",
-                            1 => "Unknown 3rd party compiler.",
-                            2 => "KASM",
-                            3 => "KerbalC",
-                            4 => "Gravitas",
-                            5 => "Unofficial external KerbalScript compiler",
-                            _ => "Compiler unrecognized. Please update this tool. If there is no updated, contact the developer.",
-                        };
-                
-                        format!("  Compiled using: {} version {}.{}.{}", compiler_name, major_version, minor_version, patch_version)
-                        
-                    }
-                    _ => String::from("  Unknown compiler. Consider updating this tool version or contacting the developer.")
-                }
-            },
-            None => {
-                String::from("  Unknown compiler. Not enough data.")
-            }
-        };
-
-        println!("{}", msg);
-
-    }
-    else if matches.is_present("disassemble")
-    {
+    if matches.is_present("info") ||  matches.is_present("disassemble") || matches.is_present("full_contents")
+    || matches.is_present("argument_section") {
         let mut args_list: Vec<Argument> = Vec::new();
         let mut map_index_to_arg: HashMap<i32, i32> = HashMap::new();
         let mut map_arg_to_index: HashMap<i32, i32> = HashMap::new();
@@ -105,99 +188,24 @@ fn dump_ksm(matches: ArgMatches, raw_contents: Vec<u8>) -> Result<(), Box<dyn Er
 
         let index_bytes = read_arguments(&mut contents_iter, &mut args_list, &mut map_index_to_arg, &mut map_arg_to_index)?;
 
-        println!("Argument section:");
-        println!("  {:<12}{:<24}{}", "Type", "Value", "Index");
-
-        for i in 0..args_list.len() {
-            println!("  {:<12}{:<24}{:>}", argument_type_string(&args_list[i]), args_list[i].to_string(), map_arg_to_index.get(&(i as i32)).unwrap());
-        }
-
-        let (ksm_code_sections_result, ksm_debug_section) = read_all_sections(&mut contents_iter, index_bytes)?;
-
-        let mut current_instr_address = 1;
-
-        for section in ksm_code_sections_result.iter() {
-            println!("\n{}:", match section.section_type {
-                SectionType::FUNCTION => "FUNCTION",
-                SectionType::INITIALIZATION => "INITIALIZATION",
-                SectionType::MAIN => "MAIN"
-            });
-
-            for instr in &section.instructions {
-
-                let opcode: u8;
-                let num_operands;
-                let mut ops: Vec<i32> = Vec::new();
-
-                match instr {
-                    Instr::NoOperand(op) => {
-                        opcode = *op;
-                        num_operands = 0;
-                    },
-                    Instr::SingleOperand(op, o1) => {
-                        opcode = *op;
-                        ops.push(*o1);
-                        num_operands = 1;
-                    },
-                    Instr::DoubleOperand(op, o1, o2) => {
-                        opcode = *op;
-                        ops.push(*o1);
-                        ops.push(*o2);
-                        num_operands = 2;
-                    }
-                };
-
-                print!("  ");
-
-                if matches.is_present("show_addresses") {
-                    print!("{:#04x}  ", current_instr_address);
-                }
-
-                if matches.is_present("show_raw_insn") {
-
-                    let mut raw_instr_str = String::new();
-
-                    raw_instr_str.push_str(&format!("{:#04x} ", opcode));
-
-                    for operand in &ops {
-                        raw_instr_str.push_str(&match index_bytes {
-                            1 => format!("{:#04x} ", *operand as u16),
-                            2 => format!("{:#04x} ", *operand as u16),
-                            3 => format!("{:#04x}{:02x} ", (*operand / 0x100) as u8, (*operand % 0x100) as u16),
-                            4 => format!("{:#06x} ", *operand),
-                            _ => {
-                                return Err("You have an extremely long file, please contact the developer.".into());
-                            }
-                        });
-                    }
-
-                    print!("{:<18} ", raw_instr_str);
-                }
-
-                print!("  {:<5}", get_instr_mnemonic(opcode));
-
-                let mut current_operand = 0;
-                for operand in &ops {
-                    print!(" {}", args_list[*map_index_to_arg.get(operand).unwrap() as usize]);
-
-                    current_operand += 1;
-
-                    if current_operand < num_operands {
-                        print!(",");
-                    }
-                }
-
-                println!("");
-
-                current_instr_address += 1;
-            }
-            println!("");
+        if matches.is_present("argument_section") {
+            dump_arg_section(&args_list, &map_arg_to_index);
         }
         
+        if matches.is_present("info") {
+            dump_ksm_info(&args_list);
+        }
+
+        if matches.is_present("disassemble") {
+            let (ksm_code_sections_result, ksm_debug_section) = read_all_sections(&mut contents_iter, index_bytes)?;
+
+            dump_ksm_disassemble(&ksm_code_sections_result, index_bytes, &args_list, &map_index_to_arg, !matches.is_present("show_no_addresses"), !matches.is_present("show_no_raw_insn"));
+        }
+
     }
     else
     {
-        println!("No actions specified.");
+        println!("No action specified.");
     }
 
     Ok(())
