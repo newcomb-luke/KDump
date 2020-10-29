@@ -1,11 +1,13 @@
 use std::io::prelude::*;
-use std::{fs, error::Error, collections::HashMap};
+use std::{fs, error::Error, collections::HashMap, iter::Peekable, slice::Iter};
 use clap::{ArgMatches};
 use flate2::read::GzDecoder;
 
 mod argument;
+mod opcode;
 
 use argument::{Argument, read_argument, argument_type_string};
+use opcode::{read_all_sections, SectionType, get_instr_mnemonic, Instr};
 
 pub static VERSION:&'static str = "1.0.0";
 
@@ -48,8 +50,9 @@ fn dump_ksm(matches: ArgMatches, raw_contents: Vec<u8>) -> Result<(), Box<dyn Er
         let mut args_list: Vec<Argument> = Vec::new();
         let mut map_index_to_arg: HashMap<i32, i32> = HashMap::new();
         let mut map_arg_to_index: HashMap<i32, i32> = HashMap::new();
+        let mut contents_iter = decompressed.iter().peekable();
 
-        read_arguments(&decompressed, &mut args_list, &mut map_index_to_arg, &mut map_arg_to_index)?;
+        read_arguments(&mut contents_iter, &mut args_list, &mut map_index_to_arg, &mut map_arg_to_index)?;
 
         println!("KSM File Info:");
 
@@ -98,8 +101,9 @@ fn dump_ksm(matches: ArgMatches, raw_contents: Vec<u8>) -> Result<(), Box<dyn Er
         let mut args_list: Vec<Argument> = Vec::new();
         let mut map_index_to_arg: HashMap<i32, i32> = HashMap::new();
         let mut map_arg_to_index: HashMap<i32, i32> = HashMap::new();
+        let mut contents_iter = decompressed.iter().peekable();
 
-        let _index_bytes = read_arguments(&decompressed, &mut args_list, &mut map_index_to_arg, &mut map_arg_to_index)?;
+        let index_bytes = read_arguments(&mut contents_iter, &mut args_list, &mut map_index_to_arg, &mut map_arg_to_index)?;
 
         println!("Argument section:");
         println!("  {:<12}{:<24}{}", "Type", "Value", "Index");
@@ -107,6 +111,89 @@ fn dump_ksm(matches: ArgMatches, raw_contents: Vec<u8>) -> Result<(), Box<dyn Er
         for i in 0..args_list.len() {
             println!("  {:<12}{:<24}{:>}", argument_type_string(&args_list[i]), args_list[i].to_string(), map_arg_to_index.get(&(i as i32)).unwrap());
         }
+
+        let (ksm_code_sections_result, ksm_debug_section) = read_all_sections(&mut contents_iter, index_bytes)?;
+
+        let mut current_instr_address = 1;
+
+        for section in ksm_code_sections_result.iter() {
+            println!("\n{}:", match section.section_type {
+                SectionType::FUNCTION => "FUNCTION",
+                SectionType::INITIALIZATION => "INITIALIZATION",
+                SectionType::MAIN => "MAIN"
+            });
+
+            for instr in &section.instructions {
+
+                let opcode: u8;
+                let num_operands;
+                let mut ops: Vec<i32> = Vec::new();
+
+                match instr {
+                    Instr::NoOperand(op) => {
+                        opcode = *op;
+                        num_operands = 0;
+                    },
+                    Instr::SingleOperand(op, o1) => {
+                        opcode = *op;
+                        ops.push(*o1);
+                        num_operands = 1;
+                    },
+                    Instr::DoubleOperand(op, o1, o2) => {
+                        opcode = *op;
+                        ops.push(*o1);
+                        ops.push(*o2);
+                        num_operands = 2;
+                    }
+                };
+
+                print!("  ");
+
+                if matches.is_present("show_addresses") {
+                    print!("{:#04x}  ", current_instr_address);
+                }
+
+                if matches.is_present("show_raw_insn") {
+
+                    let mut raw_instr_str = String::new();
+
+                    raw_instr_str.push_str(&format!("{:#04x} ", opcode));
+
+                    for operand in &ops {
+                        raw_instr_str.push_str(&match index_bytes {
+                            1 => format!("{:#04x} ", *operand as u16),
+                            2 => format!("{:#04x} ", *operand as u16),
+                            3 => format!("{:#04x}{:02x} ", (*operand / 0x100) as u8, (*operand % 0x100) as u16),
+                            4 => format!("{:#06x} ", *operand),
+                            _ => {
+                                return Err("You have an extremely long file, please contact the developer.".into());
+                            }
+                        });
+                    }
+
+                    print!("{:<18} ", raw_instr_str);
+                }
+
+                print!("  {:<5}", get_instr_mnemonic(opcode));
+
+                let mut current_operand = 0;
+                for operand in &ops {
+                    print!(" {}", args_list[*map_index_to_arg.get(operand).unwrap() as usize]);
+
+                    current_operand += 1;
+
+                    if current_operand < num_operands {
+                        print!(",");
+                    }
+                }
+
+                println!("");
+
+                current_instr_address += 1;
+            }
+            println!("");
+        }
+        
     }
     else
     {
@@ -116,9 +203,7 @@ fn dump_ksm(matches: ArgMatches, raw_contents: Vec<u8>) -> Result<(), Box<dyn Er
     Ok(())
 }
 
-fn read_arguments(contents: &Vec<u8>, args_list: &mut Vec<Argument>, map_index_to_arg: &mut HashMap<i32, i32>, map_arg_to_index: &mut HashMap<i32, i32>) -> Result<i32, Box<dyn Error>> {
-
-    let mut contents_iter = contents.iter().peekable();
+fn read_arguments(contents_iter: &mut Peekable<Iter<u8>>, args_list: &mut Vec<Argument>, map_index_to_arg: &mut HashMap<i32, i32>, map_arg_to_index: &mut HashMap<i32, i32>) -> Result<i32, Box<dyn Error>> {
 
     for _ in 0..6 {
         contents_iter.next();
@@ -130,7 +215,7 @@ fn read_arguments(contents: &Vec<u8>, args_list: &mut Vec<Argument>, map_index_t
     let mut current_argument_number = 0;
     
     while **contents_iter.peek().unwrap() != b'%' {
-        let (arg, len) = read_argument(&mut contents_iter)?;
+        let (arg, len) = read_argument(contents_iter)?;
 
         args_list.push(arg);
 

@@ -21,14 +21,14 @@ impl fmt::Display for Argument {
         match self {
             Argument::NULL => write!(f, "NULL"),
             Argument::Boolean(b) => write!(f, "{}", if *b { "true"} else { "false"}),
-            Argument::Byte(b) => write!(f, "{:x?}", b),
-            Argument::Int16(i) => write!(f, "{:x?}", i),
-            Argument::Int32(i) => write!(f, "{:x?}", i),
+            Argument::Byte(b) => write!(f, "{:#x}", b),
+            Argument::Int16(i) => write!(f, "{:#04x}", i),
+            Argument::Int32(i) => write!(f, "{:#06x}", i),
             Argument::Float(fl) => write!(f, "{:.5}", fl),
             Argument::Double(d) => write!(f, "{:.5}", d),
             Argument::String(s) => write!(f, "{}", s),
             Argument::ArgMarker => write!(f, "ARGM"),
-            Argument::ScalarIntValue(i) => write!(f, "{:x?}", i),
+            Argument::ScalarIntValue(i) => write!(f, "{:#06x}", i),
             Argument::ScalarDoubleValue(d) => write!(f, "{:.5}", d),
             Argument::BooleanValue(b) => write!(f, "{}", if *b { "true"} else { "false"}),
             Argument::StringValue(s) => write!(f, "{}", s)
@@ -216,15 +216,15 @@ pub fn read_argument(byte_iter: &mut Peekable<Iter<u8>>) -> Result<(Argument, i3
 
             match &v {
                 Argument::String(s) => {
-                    argument_len += s.len() as i32;
+                    argument_len += s.len() as i32 + 1;
                 },
                 Argument::StringValue(s) => {
-                    argument_len += s.len() as i32;
+                    argument_len += s.len() as i32 + 1;
                 },
                 _ => ()
             };
 
-            Ok((v, argument_len))
+            Ok((v, argument_len + 1))
         },
         None => return Err("Reached EOF before the argument section eneded".into())
     }
