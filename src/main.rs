@@ -1,8 +1,7 @@
-use std::process;
 use clap::{App, Arg};
+use std::process;
 
 fn main() {
-    
     let matches = App::new("kDump Utility")
                             .version(kdump::VERSION)
                             .author("Luke Newcomb")
@@ -16,7 +15,7 @@ fn main() {
                                 .short("D")
                                 .long("disassemble"))
                             .arg(Arg::with_name("disassemble_symbol")
-                                .help("Disassembles starting at the symbol provided, if it is a function, disassembles until the end. If not, disassembles until the next symbol.")
+                                .help("Disassembles starting at the symbol provided until the end of the section.")
                                 .short("d")
                                 .long("disassemble-symbol")
                                 .require_equals(true)
@@ -24,7 +23,7 @@ fn main() {
                                 .value_name("SYMBOL")
                                 .conflicts_with("disassemble"))
                             .arg(Arg::with_name("file_headers")
-                                .help("Displays summary information of the overall header of the object file.")
+                                .help("Displays summary information of the overall header of the KO file.")
                                 .short("f")
                                 .long("file-headers"))
                             .arg(Arg::with_name("argument_section")
@@ -52,13 +51,17 @@ fn main() {
                                 .short("t")
                                 .long("syms"))
                             .arg(Arg::with_name("all_headers")
-                                .help("Displays all available header information including the symbol table.")
+                                .help("Displays all available KO file header information including the symbol table.")
                                 .short("x")
                                 .long("all-headers"))
                             .arg(Arg::with_name("info")
                                 .help("Displays all available meta info of the object file including compiler comments and version information.")
                                 .short("i")
                                 .long("info"))
+                            .arg(Arg::with_name("demangle")
+                                .help("Tries to demangle disassembled function and variable names.")
+                                .short("C")
+                                .long("demangle"))
                             .arg(Arg::with_name("show_no_raw_insn")
                                 .help("When disassembling, enables showing the raw bytes that make up each instruction")
                                 .long("show-no-raw-insn"))

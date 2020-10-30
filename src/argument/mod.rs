@@ -1,4 +1,4 @@
-use std::{error::Error, iter::Peekable, slice::Iter, fmt};
+use std::{error::Error, fmt, iter::Peekable, slice::Iter};
 
 pub enum Argument {
     NULL,
@@ -13,14 +13,14 @@ pub enum Argument {
     ScalarIntValue(i32),
     ScalarDoubleValue(f64),
     BooleanValue(bool),
-    StringValue(String)
+    StringValue(String),
 }
 
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Argument::NULL => write!(f, "NULL"),
-            Argument::Boolean(b) => write!(f, "{}", if *b { "true"} else { "false"}),
+            Argument::Boolean(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Argument::Byte(b) => write!(f, "{:#x}", b),
             Argument::Int16(i) => write!(f, "{:#04x}", i),
             Argument::Int32(i) => write!(f, "{:#06x}", i),
@@ -30,8 +30,8 @@ impl fmt::Display for Argument {
             Argument::ArgMarker => write!(f, "ARGM"),
             Argument::ScalarIntValue(i) => write!(f, "{:#06x}", i),
             Argument::ScalarDoubleValue(d) => write!(f, "{:.5}", d),
-            Argument::BooleanValue(b) => write!(f, "{}", if *b { "true"} else { "false"}),
-            Argument::StringValue(s) => write!(f, "{}", s)
+            Argument::BooleanValue(b) => write!(f, "{}", if *b { "true" } else { "false" }),
+            Argument::StringValue(s) => write!(f, "{}", s),
         }
     }
 }
@@ -50,28 +50,28 @@ pub fn argument_type_string(arg: &Argument) -> String {
         Argument::ScalarIntValue(_) => String::from("SCALARINT"),
         Argument::ScalarDoubleValue(_) => String::from("SCALARF64"),
         Argument::BooleanValue(_) => String::from("BOOLVALUE"),
-        Argument::StringValue(_) => String::from("STRINGVALUE")
+        Argument::StringValue(_) => String::from("STRINGVALUE"),
     }
 }
 
 fn read_boolean(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     match byte_iter.next() {
         Some(v) => Some(Argument::Boolean(*v != 0u8)),
-        None => None
+        None => None,
     }
 }
 
 fn read_boolean_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     match byte_iter.next() {
         Some(v) => Some(Argument::BooleanValue(*v != 0u8)),
-        None => None
+        None => None,
     }
 }
 
 fn read_byte(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     match byte_iter.next() {
         Some(v) => Some(Argument::Byte(*v as i8)),
-        None => None
+        None => None,
     }
 }
 
@@ -81,11 +81,11 @@ fn read_int16(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     for i in 0..2 {
         match byte_iter.next() {
             Some(v) => arr[i] = *v,
-            None => return None
+            None => return None,
         }
     }
 
-    return Some(Argument::Int16( i16::from_le_bytes(arr) ));
+    return Some(Argument::Int16(i16::from_le_bytes(arr)));
 }
 
 fn read_int32(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
@@ -94,11 +94,11 @@ fn read_int32(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     for i in 0..4 {
         match byte_iter.next() {
             Some(v) => arr[i] = *v,
-            None => return None
+            None => return None,
         }
     }
 
-    return Some(Argument::Int32( i32::from_le_bytes(arr) ));
+    return Some(Argument::Int32(i32::from_le_bytes(arr)));
 }
 
 fn read_scalar_int_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
@@ -107,11 +107,11 @@ fn read_scalar_int_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument>
     for i in 0..4 {
         match byte_iter.next() {
             Some(v) => arr[i] = *v,
-            None => return None
+            None => return None,
         }
     }
 
-    return Some(Argument::ScalarIntValue( i32::from_le_bytes(arr) ));
+    return Some(Argument::ScalarIntValue(i32::from_le_bytes(arr)));
 }
 
 fn read_float(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
@@ -120,11 +120,11 @@ fn read_float(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     for i in 0..4 {
         match byte_iter.next() {
             Some(v) => arr[i] = *v,
-            None => return None
+            None => return None,
         }
     }
 
-    return Some(Argument::Float( f32::from_le_bytes(arr) ));
+    return Some(Argument::Float(f32::from_le_bytes(arr)));
 }
 
 fn read_double(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
@@ -133,11 +133,11 @@ fn read_double(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     for i in 0..8 {
         match byte_iter.next() {
             Some(v) => arr[i] = *v,
-            None => return None
+            None => return None,
         }
     }
 
-    return Some(Argument::Double( f64::from_le_bytes(arr) ));
+    return Some(Argument::Double(f64::from_le_bytes(arr)));
 }
 
 fn read_scalar_double_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
@@ -146,25 +146,25 @@ fn read_scalar_double_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argume
     for i in 0..8 {
         match byte_iter.next() {
             Some(v) => arr[i] = *v,
-            None => return None
+            None => return None,
         }
     }
 
-    return Some(Argument::ScalarDoubleValue( f64::from_le_bytes(arr) ));
+    return Some(Argument::ScalarDoubleValue(f64::from_le_bytes(arr)));
 }
 
 fn read_string(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     let len = match byte_iter.next() {
         Some(v) => *v,
-        None => return None
+        None => return None,
     };
 
     let mut internal = String::with_capacity(len as usize);
 
     for _ in 0..len {
         match byte_iter.next() {
-            Some(v) => internal.push( *v as char ),
-            None => return None
+            Some(v) => internal.push(*v as char),
+            None => return None,
         }
     }
 
@@ -173,23 +173,22 @@ fn read_string(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
 
 fn read_string_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
     match read_string(byte_iter) {
-        Some(v) => {
-            match v {
-                Argument::String(s) => Some(Argument::StringValue(s)),
-                _ => None
-            }
-        }
-        None => None
+        Some(v) => match v {
+            Argument::String(s) => Some(Argument::StringValue(s)),
+            _ => None,
+        },
+        None => None,
     }
 }
 
-pub fn read_argument(byte_iter: &mut Peekable<Iter<u8>>) -> Result<(Argument, i32), Box<dyn Error>> {
-
+pub fn read_argument(
+    byte_iter: &mut Peekable<Iter<u8>>,
+) -> Result<(Argument, i32), Box<dyn Error>> {
     let arg_type = match byte_iter.next() {
         Some(v) => v,
-        None => return Err("Reached EOF before the argument section eneded".into())
+        None => return Err("Reached EOF before the argument section eneded".into()),
     };
-    
+
     let mut argument_len: i32 = 0;
 
     let possible_argument = match arg_type {
@@ -213,19 +212,18 @@ pub fn read_argument(byte_iter: &mut Peekable<Iter<u8>>) -> Result<(Argument, i3
 
     match possible_argument {
         Some(v) => {
-
             match &v {
                 Argument::String(s) => {
                     argument_len += s.len() as i32 + 1;
-                },
+                }
                 Argument::StringValue(s) => {
                     argument_len += s.len() as i32 + 1;
-                },
-                _ => ()
+                }
+                _ => (),
             };
 
             Ok((v, argument_len + 1))
-        },
-        None => return Err("Reached EOF before the argument section eneded".into())
+        }
+        None => return Err("Reached EOF before the argument section eneded".into()),
     }
 }

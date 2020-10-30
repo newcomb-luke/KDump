@@ -1,36 +1,46 @@
-use std::{error::Error, iter::Peekable, slice::Iter, convert::TryInto};
+use std::{convert::TryInto, error::Error, iter::Peekable, slice::Iter};
 
 pub enum Instr {
     NoOperand(u8),
     SingleOperand(u8, i32),
-    DoubleOperand(u8, i32, i32)
+    DoubleOperand(u8, i32, i32),
 }
 
+#[derive(PartialEq)]
 pub enum SectionType {
     FUNCTION,
     INITIALIZATION,
-    MAIN
+    MAIN,
 }
 
 pub struct CodeSection {
     pub section_type: SectionType,
-    pub instructions: Vec<Instr>
+    pub instructions: Vec<Instr>,
+    pub size: i32,
 }
-
 
 pub struct DebugSection {
     pub range_size: i32,
-    pub debug_entries: Vec<DebugEntry>
+    pub debug_entries: Vec<DebugEntry>,
 }
 
 pub struct DebugEntry {
     pub line_number: i32,
     pub number_ranges: i32,
-    pub ranges: Vec<(i32,i32)>
+    pub ranges: Vec<(i32, i32)>,
+}
+
+pub fn size_of_instr(instr: &Instr, index_bytes: i32) -> i32 {
+    let num_operands = match instr {
+        Instr::NoOperand(_) => 0,
+        Instr::SingleOperand(_, _) => 1,
+        Instr::DoubleOperand(_, _, _) => 2,
+    };
+
+    num_operands * index_bytes + 1
 }
 
 fn read_instr(byte_iter: &mut Peekable<Iter<u8>>, index_bytes: i32) -> Option<Instr> {
-
     let opcode = match byte_iter.next() {
         Some(b) => *b,
         None => {
@@ -43,33 +53,34 @@ fn read_instr(byte_iter: &mut Peekable<Iter<u8>>, index_bytes: i32) -> Option<In
     match num_operands {
         0 => Some(Instr::NoOperand(opcode)),
         1 => {
-
             let arg_index = match read_bytes_as_i32(byte_iter, index_bytes as usize) {
                 Some(v) => v,
-                None => return None
+                None => return None,
             };
 
             Some(Instr::SingleOperand(opcode, arg_index))
-        },
+        }
         2 => {
             let arg1_index = match read_bytes_as_i32(byte_iter, index_bytes as usize) {
                 Some(v) => v,
-                None => return None
+                None => return None,
             };
 
             let arg2_index = match read_bytes_as_i32(byte_iter, index_bytes as usize) {
                 Some(v) => v,
-                None => return None
+                None => return None,
             };
 
             Some(Instr::DoubleOperand(opcode, arg1_index, arg2_index))
-        },
-        _ => None
+        }
+        _ => None,
     }
 }
 
-pub fn read_all_sections(byte_iter: &mut Peekable<Iter<u8>>, arg_index_bytes: i32) -> Result<(Vec<CodeSection>, DebugSection), Box<dyn Error>> {
-    
+pub fn read_all_sections(
+    byte_iter: &mut Peekable<Iter<u8>>,
+    arg_index_bytes: i32,
+) -> Result<(Vec<CodeSection>, DebugSection), Box<dyn Error>> {
     let mut sections: Vec<CodeSection> = Vec::new();
     let mut section_number = 1;
     let debug_section: DebugSection;
@@ -77,7 +88,7 @@ pub fn read_all_sections(byte_iter: &mut Peekable<Iter<u8>>, arg_index_bytes: i3
     loop {
         // Consume '%'
         match byte_iter.next() {
-            Some(_) => {},
+            Some(_) => {}
             None => {
                 return Err(format!("Reached EOF before section {} ended.", section_number).into());
             }
@@ -103,60 +114,59 @@ pub fn read_all_sections(byte_iter: &mut Peekable<Iter<u8>>, arg_index_bytes: i3
                     Some(v) => {
                         debug_section = v;
                         break;
-                    },
-                    None => {
-                        return Err("Reached EOF before debug section ended.".into())
                     }
+                    None => return Err("Reached EOF before debug section ended.".into()),
                 }
-            }
-            else
-            {
-
+            } else {
                 let section_type = match *next_char {
                     b'F' => SectionType::FUNCTION,
                     b'I' => SectionType::INITIALIZATION,
                     b'M' => SectionType::MAIN,
                     wrong => {
-                        return Err(format!("Invalid section identifier encountered: {} ({})", wrong as char, wrong).into());
+                        return Err(format!(
+                            "Invalid section identifier encountered: {} ({})",
+                            wrong as char, wrong
+                        )
+                        .into());
                     }
                 };
 
                 match read_code_section(byte_iter, arg_index_bytes, section_type) {
-                    (v, msg) => {
-                        match v {
-                            Some(code_section) => {
-                                sections.push(code_section);
-                            },
-                            None => {
-                                return Err(msg.into());
-                            }
+                    (v, msg) => match v {
+                        Some(code_section) => {
+                            sections.push(code_section);
                         }
-                    }
+                        None => {
+                            return Err(msg.into());
+                        }
+                    },
                 }
             }
-    
+
             section_number += 1;
         }
     }
-    
-    Ok((sections, debug_section))
 
+    Ok((sections, debug_section))
 }
 
 fn read_bytes_as_i32(byte_iter: &mut Peekable<Iter<u8>>, data_size: usize) -> Option<i32> {
-
     let mut bytes: Vec<u8> = vec![0; data_size];
 
     for j in 0..data_size {
         bytes[j] = match byte_iter.next() {
             Some(v) => *v,
-            None => return None
+            None => return None,
         }
     }
 
     match data_size {
         1 => Some(bytes[0] as i32),
-        2 => Some(i16::from_le_bytes(bytes[0..2].try_into().expect("If this fails we have a lot of problems.")) as i32),
+        2 => Some(i16::from_le_bytes(
+            bytes[0..2]
+                .try_into()
+                .expect("If this fails we have a lot of problems."),
+        ) as i32),
         3 => {
             let mut bytes_ext: [u8; 4] = [0; 4];
 
@@ -165,9 +175,13 @@ fn read_bytes_as_i32(byte_iter: &mut Peekable<Iter<u8>>, data_size: usize) -> Op
             }
 
             Some(i32::from_le_bytes(bytes_ext))
-        },
-        4 => Some(i32::from_le_bytes(bytes[0..4].try_into().expect("If this fails we have a TON of problems."))),
-        _ => None
+        }
+        4 => Some(i32::from_le_bytes(
+            bytes[0..4]
+                .try_into()
+                .expect("If this fails we have a TON of problems."),
+        )),
+        _ => None,
     }
 }
 
@@ -227,7 +241,7 @@ fn get_num_operands(opcode: u8) -> i32 {
         0xce => 1,
         0xcd => 2,
         0xf0 => 1,
-        _ => -1
+        _ => -1,
     }
 }
 
@@ -274,8 +288,8 @@ pub fn get_instr_mnemonic(opcode: u8) -> String {
         0x57 => "gmet",
         0x58 => "stol",
         0x59 => "stog",
-        0x5a => "phsc",
-        0x5b => "posc",
+        0x5a => "bscp",
+        0x5b => "escp",
         0x5c => "stoe",
         0x5d => "phdl",
         0x5e => "btr",
@@ -287,12 +301,16 @@ pub fn get_instr_mnemonic(opcode: u8) -> String {
         0xce => "prl",
         0xcd => "pdrl",
         0xf0 => "lbrt",
-        _ => "bogus"
+        _ => "bogus",
     })
 }
 
-fn read_code_section(byte_iter: &mut Peekable<Iter<u8>>, index_bytes: i32, section_type: SectionType) -> (Option<CodeSection>, String) {
-
+fn read_code_section(
+    byte_iter: &mut Peekable<Iter<u8>>,
+    index_bytes: i32,
+    section_type: SectionType,
+) -> (Option<CodeSection>, String) {
+    let mut section_size = 0;
     let mut instructions_list: Vec<Instr> = Vec::new();
 
     let mut peeked_char = match byte_iter.peek() {
@@ -303,12 +321,13 @@ fn read_code_section(byte_iter: &mut Peekable<Iter<u8>>, index_bytes: i32, secti
     };
 
     while **peeked_char != b'%' {
-
         instructions_list.push(match read_instr(byte_iter, index_bytes) {
-            Some(v) => v,
-            None => {
-                return (None, String::from("Reached EOF while reading instruction."))
+            Some(v) => {
+                section_size += size_of_instr(&v, index_bytes);
+
+                v
             }
+            None => return (None, String::from("Reached EOF while reading instruction.")),
         });
 
         peeked_char = match byte_iter.peek() {
@@ -319,17 +338,20 @@ fn read_code_section(byte_iter: &mut Peekable<Iter<u8>>, index_bytes: i32, secti
         };
     }
 
-    (Some(CodeSection {
-        section_type: section_type,
-        instructions: instructions_list
-    }), String::from(""))
+    (
+        Some(CodeSection {
+            section_type: section_type,
+            instructions: instructions_list,
+            size: section_size,
+        }),
+        String::from(""),
+    )
 }
 
 fn read_debug_section(byte_iter: &mut Peekable<Iter<u8>>) -> Option<DebugSection> {
-
     let range_size = match byte_iter.next() {
         Some(size) => *size as i32,
-        None => return None
+        None => return None,
     };
 
     let mut entry_list: Vec<DebugEntry> = Vec::new();
@@ -339,38 +361,36 @@ fn read_debug_section(byte_iter: &mut Peekable<Iter<u8>>) -> Option<DebugSection
 
         let line_number = match read_bytes_as_i32(byte_iter, 2) {
             Some(num) => num,
-            None => return None
+            None => return None,
         };
 
         let number_ranges = match byte_iter.next() {
             Some(num) => *num as i32,
-            None => return None
+            None => return None,
         };
 
         for _ in 0..number_ranges {
             let range_start = match read_bytes_as_i32(byte_iter, range_size as usize) {
                 Some(v) => v,
-                None => return None
+                None => return None,
             };
             let range_end = match read_bytes_as_i32(byte_iter, range_size as usize) {
                 Some(v) => v,
-                None => return None
+                None => return None,
             };
 
             ranges_list.push((range_start, range_end));
         }
 
-        entry_list.push(
-            DebugEntry {
-                line_number: line_number,
-                number_ranges: number_ranges,
-                ranges: ranges_list
-            }
-        );
+        entry_list.push(DebugEntry {
+            line_number: line_number,
+            number_ranges: number_ranges,
+            ranges: ranges_list,
+        });
     }
 
     Some(DebugSection {
         range_size: range_size,
-        debug_entries: entry_list
+        debug_entries: entry_list,
     })
 }
