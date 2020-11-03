@@ -1,7 +1,6 @@
 use clap::ArgMatches;
-use colored::*;
-
-use std::{collections::HashMap, error::Error, fs, iter::Peekable, slice::Iter};
+use std::{error::Error, fs};
+use termcolor::{Color, ColorSpec};
 
 mod argument;
 pub use argument::{Argument, Value};
@@ -13,17 +12,27 @@ mod fio;
 use fio::{determine_file_type, FileType};
 
 mod ksm_reader;
-use ksm_reader::{ArgumentSection, KSMFile, KSMFileReader, SectionType};
+pub use ksm_reader::{ArgumentSection, CodeSection, DebugSection, DebugEntry, KSMFile, KSMFileReader, SectionType};
+
+mod coloredout;
+pub use coloredout::Terminal;
+
+pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
 pub static VERSION: &'static str = "1.0.0";
-pub static LINE_COLOR: (u8, u8, u8) = (201, 155, 87);
-pub static ADDRESS_COLOR: (u8, u8, u8) = (133, 80, 179);
-pub static MNEMONIC_COLOR: (u8, u8, u8) = (201, 87, 87);
-pub static VARIABLE_COLOR: (u8, u8, u8) = (255, 147, 147);
-pub static TYPE_COLOR: (u8, u8, u8) = (129, 181, 154);
+
+pub static LINE_COLOR: Color = Color::Rgb(201, 155, 87);
+pub static ADDRESS_COLOR: Color = Color::Rgb(133, 80, 179);
+pub static MNEMONIC_COLOR: Color = Color::Rgb(201, 87, 87);
+pub static VARIABLE_COLOR: Color = Color::Rgb(255, 147, 147);
+pub static TYPE_COLOR: Color = Color::Rgb(129, 181, 154);
 
 pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
-    println!("kDump version {}", VERSION);
+    let no_color = ColorSpec::new();
+
+    let mut term = Terminal::new(no_color);
+
+    term.writeln(&format!("kDump version {}", VERSION))?;
 
     let filename = config.file_path.to_string();
     let raw_contents = fs::read(filename)?;
@@ -36,7 +45,7 @@ pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
 
             let ksm_file = KSMFile::read(&mut ksm_reader)?;
 
-            ksm_file.dump(&config);
+            ksm_file.dump(&config)?;
 
             Ok(())
         }

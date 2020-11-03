@@ -1,7 +1,6 @@
-use colored::*;
 use std::error::Error;
 
-use crate::{KSMFileReader, VARIABLE_COLOR};
+use crate::KSMFileReader;
 
 pub enum Value {
     NULL,
@@ -68,18 +67,10 @@ impl Argument {
         }
     }
 
-    pub fn colored_repr(&self) -> ColoredString {
+    pub fn is_variable(&self) -> bool {
         match &self.value {
-            Value::String(s) | Value::StringValue(s) => {
-                if s.starts_with("$") {
-                    let (_r, _g, _b) = VARIABLE_COLOR;
-
-                    format!("{}", s).truecolor(_r, _g, _b)
-                } else {
-                    s.normal()
-                }
-            }
-            _ => self.get_repr().normal(),
+            Value::String(s) | Value::StringValue(s) => s.starts_with('$'),
+            _ => false,
         }
     }
 

@@ -1,7 +1,6 @@
-use colored::*;
 use std::error::Error;
 
-use crate::{ArgumentSection, KSMFileReader, MNEMONIC_COLOR};
+use crate::KSMFileReader;
 
 pub struct Instr {
     opcode: u8,
@@ -80,7 +79,7 @@ impl Instr {
         })
     }
 
-    pub fn num_operands(opcode: u8) -> u8 {
+    pub fn opcode_num_operands(opcode: u8) -> u8 {
         match opcode {
             0x31 => 0,
             0x32 => 0,
@@ -144,6 +143,10 @@ impl Instr {
         1 + self.operand_width * self.num_operands
     }
 
+    pub fn num_operands(&self) -> usize {
+        self.num_operands as usize
+    }
+
     pub fn raw_str(&self) -> String {
         let mut raw = format!("{:02x} ", self.opcode);
 
@@ -170,30 +173,10 @@ impl Instr {
         &self.operands
     }
 
-    pub fn repr(&self, argument_section: &ArgumentSection) -> String {
-        let (_r, _g, _b) = MNEMONIC_COLOR;
-
-        let mut repr = format!("{:<5} ", Instr::get_mnemonic(self).truecolor(_r, _g, _b));
-
-        for (index, operand) in self.operands.iter().enumerate() {
-            repr.push_str(&format!(
-                "{}{}",
-                argument_section.get_argument(*operand).colored_repr(),
-                if index < self.operands.len() - 1 {
-                    ", "
-                } else {
-                    ""
-                }
-            ));
-        }
-
-        repr
-    }
-
     pub fn read(reader: &mut KSMFileReader) -> Result<Instr, Box<dyn Error>> {
         let opcode = reader.next()?;
 
-        let num_operands = Instr::num_operands(opcode);
+        let num_operands = Instr::opcode_num_operands(opcode);
 
         let mut operands: Vec<u32> = Vec::with_capacity(num_operands as usize);
 

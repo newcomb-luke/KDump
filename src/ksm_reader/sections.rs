@@ -1,7 +1,10 @@
-use colored::*;
 use std::{collections::HashMap, error::Error};
 
-use crate::{Argument, Instr, KSMFileReader, Value, ADDRESS_COLOR, VARIABLE_COLOR, LINE_COLOR, TYPE_COLOR};
+use crate::{
+    Argument, Instr, KSMFileReader, Terminal, Value, ADDRESS_COLOR, LINE_COLOR, MNEMONIC_COLOR,
+    TYPE_COLOR, VARIABLE_COLOR,
+};
+use termcolor::ColorSpec;
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum SectionType {
@@ -158,72 +161,94 @@ impl CodeSection {
         show_raw: bool,
         show_line_numbers: bool,
         argument_section: &ArgumentSection,
-        debug_section: &DebugSection
-    ) {
+        debug_section: &DebugSection,
+    ) -> Result<(), Box<dyn Error>> {
+
+        let mut term = Terminal::new(ColorSpec::new());
+
+        let mut variable_color = ColorSpec::new();
+        variable_color.set_fg(Some(VARIABLE_COLOR));
 
         let mut offset = global_offset;
 
         offset += match self.section_type {
             SectionType::FUNCTION => 2,
             SectionType::INITIALIZATION => 4,
-            SectionType::MAIN => 6
+            SectionType::MAIN => 6,
         };
 
         if self.section_type != SectionType::FUNCTION {
-            println!("\n{:?}:", self.section_type);
+            term.writeln(&format!("\n{:?}:", self.section_type))?;
         } else {
+            term.write(&format!(
+                "\n{:?}",
+                self.section_type
+            ))?;
 
-            let (_r, _g, _b) = VARIABLE_COLOR;
+            term.write_colored(&self.get_function_name(argument_section), &variable_color)?;
 
-            println!(
-                "\n{:?}{}:",
-                self.section_type,
-                self.get_function_name(argument_section).truecolor(_r, _g, _b)
-            );
+            term.writeln(&String::from(":"))?;
         }
 
         let mut addr = offset;
 
+        
+
+        let mut variable_color = ColorSpec::new();
+        variable_color.set_fg(Some(VARIABLE_COLOR));
+
+        let mut mnemonic_color = ColorSpec::new();
+        mnemonic_color.set_fg(Some(MNEMONIC_COLOR));
+
+        let mut line_color = ColorSpec::new();
+        line_color.set_fg(Some(LINE_COLOR));
+
+        let mut address_color = ColorSpec::new();
+        address_color.set_fg(Some(ADDRESS_COLOR));
+
         for (index, instruction) in self.instructions.iter().enumerate() {
-
             if show_line_numbers {
-
                 let max_line_number_width = debug_section.max_line_number.to_string().len();
 
                 match debug_section.find(addr) {
-
                     Some((entry, range)) => {
-
                         let (range_start, range_end) = range;
                         let middle_range = ((range_end - range_start) / 2) + range_start;
 
                         let operands_length = (instruction.size() - 1) as u32;
 
                         let state = match addr {
-                            addr if addr == range_start && range_start + operands_length == range_end => 3,
+                            addr if addr == range_start
+                                && range_start + operands_length == range_end =>
+                            {
+                                3
+                            }
                             addr if addr == range_start => {
-
                                 let next_instruction = self.instructions.get(index + 1).unwrap();
 
-                                if addr + operands_length + next_instruction.size() as u32 == range_end {
+                                if addr + operands_length + next_instruction.size() as u32
+                                    == range_end
+                                {
                                     5
-                                }
-                                else {
+                                } else {
                                     0
                                 }
-                            },
+                            }
                             addr if addr + operands_length == range_end => 4,
-                            addr if middle_range >= addr && (middle_range <= (addr + operands_length)) => 2,
+                            addr if middle_range >= addr
+                                && (middle_range <= (addr + operands_length)) =>
+                            {
+                                2
+                            }
                             addr if addr + operands_length < range_end && addr > range_start => 1,
                             _ => 6,
                         };
 
-                        // println!("Addr: {:x}, Addr+Len: {:x}, State: {}, Line: {}, range: [{:06x}, {:06x}]", addr, addr + operands_length, state, entry.line_number, range_start, range_end);
+                        // term.writeln(&format!("Addr: {:x}, Addr+Len: {:x}, State: {}, Line: {}, range: [{:06x}, {:06x}]", addr, addr + operands_length, state, entry.line_number, range_start, range_end))?;
 
                         let before_text = if state == 2 || state == 5 || state == 3 {
                             format!("   {} ", entry.line_number)
-                        }
-                        else {
+                        } else {
                             String::from("")
                         };
 
@@ -237,55 +262,62 @@ impl CodeSection {
                             _ => "    ",
                         });
 
-                        let (_r, _g, _b) = LINE_COLOR;
-
-                        print!(
-                            "{}",
-                            format!(
+                        term.write_colored(
+                            &format!(
                                 "{:>1$}{2}",
                                 before_text,
                                 max_line_number_width + 4,
                                 after_text
-                            )
-                            .truecolor(_r, _g, _b)
-                        );
-
-                    },
-
-                    None => {
-
-                        print!("    ");
-
+                            ),
+                            &line_color,
+                        )?;
                     }
 
+                    None => {
+                        term.write(&String::from("    "))?;
+                    }
                 };
-
-            }
-            else {
-                print!("  ");
+            } else {
+                term.write(&String::from("  "))?;
             }
 
             if show_addr {
-                let (_r, _g, _b) = ADDRESS_COLOR;
-
-                print!(
-                    "{}",
-                    format!(
+                term.write_colored(
+                    &format!(
                         "{:06x}  ",
                         offset + self.index_to_offset.get(&index).unwrap()
-                    )
-                    .truecolor(_r, _g, _b)
-                );
+                    ),
+                    &address_color
+                )?;
             }
 
             if show_raw {
-                print!("{}", instruction.raw_str());
+                term.write(&instruction.raw_str())?;
             }
 
-            println!("{}", instruction.repr(argument_section));
+            term.write_colored(&format!("{:<4} ", Instr::get_mnemonic(&instruction)), &mnemonic_color)?;
+
+            for (index, operand) in instruction.get_operands().iter().enumerate() {
+
+                let argument = argument_section.get_argument(*operand);
+
+                if argument.is_variable() {
+                    term.write(&argument.get_repr())?;
+                } else {
+                    term.write_colored(&argument.get_repr(), &variable_color)?;
+                }
+
+                if index < instruction.num_operands() - 1 {
+                    term.write(&String::from(", "))?;
+                }
+            }
+
+            term.writeln(&String::from(""))?;
 
             addr += instruction.size() as u32;
         }
+
+        Ok(())
     }
 }
 
@@ -296,7 +328,11 @@ pub struct DebugSection {
 }
 
 impl DebugSection {
-    pub fn new(range_size: u8, max_line_number: u16, debug_entries: Vec<DebugEntry>) -> DebugSection {
+    pub fn new(
+        range_size: u8,
+        max_line_number: u16,
+        debug_entries: Vec<DebugEntry>,
+    ) -> DebugSection {
         DebugSection {
             range_size,
             max_line_number,
@@ -316,7 +352,6 @@ impl DebugSection {
         reader.set_range_bytes(range_size);
 
         while !reader.eof() {
-
             let entry = DebugEntry::read(reader)?;
 
             if entry.line_number > max_line_number {
@@ -326,27 +361,23 @@ impl DebugSection {
             debug_entries.push(entry);
         }
 
-        Ok(DebugSection::new(range_size, max_line_number,  debug_entries))
+        Ok(DebugSection::new(
+            range_size,
+            max_line_number,
+            debug_entries,
+        ))
     }
 
     pub fn find(&self, addr: u32) -> Option<(&DebugEntry, (u32, u32))> {
-
         for entry in self.debug_entries.iter() {
-
             for (range_start, range_end) in entry.ranges.iter() {
-
                 if addr >= *range_start && addr <= *range_end {
-
                     return Some((entry, (*range_start, *range_end)));
-
                 }
-
             }
-
         }
-        
-        None
 
+        None
     }
 
     pub fn get_range_bytes(&self) -> u8 {
@@ -361,23 +392,29 @@ impl DebugSection {
         self.max_line_number
     }
 
-    pub fn dump(&self) {
-        println!("\nDebug section:");
+    pub fn dump(&self) -> Result<(), Box<dyn Error>> {
+
+        let mut term = Terminal::new(ColorSpec::new());
+
+        term.writeln(&String::from("\nDebug section:"))?;
 
         for entry in self.debug_entries.iter() {
-            print!(
+            term.write(&format!(
                 "  Line {}, {} range{}:",
                 entry.line_number,
                 entry.number_ranges,
                 if entry.number_ranges > 1 { "s" } else { "" }
-            );
+            ))?;
 
             for (range_start, range_end) in entry.ranges.iter() {
-                print!(" [{:06x}, {:06x}]", range_start, range_end);
+
+                term.write(&format!(" [{:06x}, {:06x}]", range_start, range_end))?;
             }
 
-            println!("");
+            term.writeln(&String::from(""))?;
         }
+
+        Ok(())
     }
 }
 
@@ -412,7 +449,6 @@ impl DebugEntry {
 
         Ok(DebugEntry::new(line_number, number_ranges, ranges))
     }
-
 }
 
 /// Represents an argument section in a KSM file
@@ -488,20 +524,32 @@ impl ArgumentSection {
         Ok(ArgumentSection::new(addr_bytes, argument_list))
     }
 
-    pub fn dump(&self) {
-        println!("\nArgument section {} byte indexing:", self.addr_bytes);
+    pub fn dump(&self) -> Result<(), Box<dyn Error>> {
 
-        println!("  {:<12}{:<24}{}", "Type", "Value", "Index");
+        let mut term = Terminal::new(ColorSpec::new());
 
-        let (_r, _g, _b) = TYPE_COLOR;
+        term.writeln(&format!("\nArgument section {} byte indexing:", self.addr_bytes))?;
+
+        term.writeln(&format!("  {:<12}{:<24}{}", "Type", "Value", "Index"))?;
+
+        let mut variable_color = ColorSpec::new();
+        variable_color.set_fg(Some(VARIABLE_COLOR));
+
+        let mut type_color = ColorSpec::new();
+        type_color.set_fg(Some(TYPE_COLOR));
 
         for argument in self.argument_list.iter() {
-            println!(
-                "  {:<12}{:<24}{:>}",
-                argument.get_type_str().truecolor(_r, _g, _b),
-                argument.colored_repr(),
-                argument.get_address()
-            );
+            term.write_colored(&format!("  {:<12}", argument.get_type_str()), &type_color)?;
+
+            if argument.is_variable() {
+                term.write_colored(&format!("{:<24}", argument.get_repr()), &variable_color)?;
+            } else {
+                term.write(&format!("{:<24}", argument.get_repr()))?;
+            }
+
+            term.writeln(&format!("{:>}", argument.get_address()))?;
         }
+
+        Ok(())
     }
 }

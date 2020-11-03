@@ -2,11 +2,12 @@ use flate2::read::GzDecoder;
 use std::error::Error;
 use std::io::Read;
 
+use termcolor::ColorSpec;
+
 mod sections;
+pub use sections::{ArgumentSection, CodeSection, DebugSection, DebugEntry, SectionType};
 
-pub use sections::{ArgumentSection, CodeSection, DebugSection, SectionType};
-
-use crate::{CLIConfig, Value};
+use crate::{CLIConfig, Terminal, Value};
 
 pub struct KSMFile {
     argument_section: ArgumentSection,
@@ -67,7 +68,6 @@ impl KSMFile {
     }
 
     pub fn get_compiler(&self) -> String {
-
         // Tests the first argment of the KSM file argument section
         match self.argument_section.get_argument_list().get(0) {
             Some(arg) => match arg.get_value() {
@@ -83,23 +83,23 @@ impl KSMFile {
             },
             None => String::from("Unknown compiler. Not enough data."),
         }
-
     }
 
-    pub fn dump(&self, config: &CLIConfig) {
+    pub fn dump(&self, config: &CLIConfig) -> Result<(), Box<dyn Error>> {
+
+        let mut term = Terminal::new(ColorSpec::new());
 
         if config.info {
-            println!("\nKSM File Info:");
+            term.writeln(&String::from("\nKSM File Info:"))?;
 
-            println!("  {}", self.get_compiler());
+            term.writeln(&format!("  {}", self.get_compiler()))?;
         }
 
         if config.full_contents || config.argument_section {
-            self.argument_section.dump();
+            self.argument_section.dump()?;
         }
 
         if config.full_contents || config.disassemble {
-
             let mut offset = 0;
 
             for section in self.code_sections.iter() {
@@ -109,22 +109,19 @@ impl KSMFile {
                     !config.show_no_raw_insn,
                     config.line_numbers,
                     &self.argument_section,
-                    &self.debug_section
-                );
+                    &self.debug_section,
+                )?;
 
                 offset += section.size();
             }
         } else if config.disassemble_symbol {
-
             let mut offset = 0;
 
             for section in self.code_sections.iter() {
                 // Checks if the section contains the symbol that was speciifed by the command line argument
-                if section.contains(
-                    &config.disassemble_symbol_value,
-                    &self.argument_section,
-                ) || (section.get_type() == SectionType::MAIN
-                    && config.disassemble_symbol_value.eq_ignore_ascii_case("main"))
+                if section.contains(&config.disassemble_symbol_value, &self.argument_section)
+                    || (section.get_type() == SectionType::MAIN
+                        && config.disassemble_symbol_value.eq_ignore_ascii_case("main"))
                 {
                     section.dump(
                         offset,
@@ -132,8 +129,8 @@ impl KSMFile {
                         !config.show_no_raw_insn,
                         config.line_numbers,
                         &self.argument_section,
-                        &self.debug_section
-                    );
+                        &self.debug_section,
+                    )?;
 
                     break;
                 }
@@ -143,9 +140,10 @@ impl KSMFile {
         }
 
         if config.full_contents {
-            self.debug_section.dump();
+            self.debug_section.dump()?;
         }
 
+        Ok(())
     }
 }
 
