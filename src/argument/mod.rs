@@ -1,6 +1,9 @@
-use std::{error::Error, fmt, iter::Peekable, slice::Iter};
+use colored::*;
+use std::error::Error;
 
-pub enum Argument {
+use crate::{KSMFileReader, VARIABLE_COLOR};
+
+pub enum Value {
     NULL,
     Boolean(bool),
     Byte(i8),
@@ -9,221 +12,141 @@ pub enum Argument {
     Float(f32),
     Double(f64),
     String(String),
-    ArgMarker,
+    ARGMARKER,
     ScalarIntValue(i32),
     ScalarDoubleValue(f64),
     BooleanValue(bool),
     StringValue(String),
 }
 
-impl fmt::Display for Argument {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Argument::NULL => write!(f, "NULL"),
-            Argument::Boolean(b) => write!(f, "{}", if *b { "true" } else { "false" }),
-            Argument::Byte(b) => write!(f, "{:#x}", b),
-            Argument::Int16(i) => write!(f, "{:#04x}", i),
-            Argument::Int32(i) => write!(f, "{:#06x}", i),
-            Argument::Float(fl) => write!(f, "{:.5}", fl),
-            Argument::Double(d) => write!(f, "{:.5}", d),
-            Argument::String(s) => write!(f, "{}", s),
-            Argument::ArgMarker => write!(f, "ARGM"),
-            Argument::ScalarIntValue(i) => write!(f, "{:#06x}", i),
-            Argument::ScalarDoubleValue(d) => write!(f, "{:.5}", d),
-            Argument::BooleanValue(b) => write!(f, "{}", if *b { "true" } else { "false" }),
-            Argument::StringValue(s) => write!(f, "{}", s),
-        }
-    }
+static VALUE_TYPES: &'static [&'static str] = &[
+    "NULL",
+    "BOOL",
+    "BYTE",
+    "INT16",
+    "INT32",
+    "F32",
+    "F64",
+    "STRING",
+    "ARGMARKER",
+    "SCALARINT",
+    "SCALARF64",
+    "BOOLVALUE",
+    "STRINGVALUE",
+];
+
+pub struct Argument {
+    value_type: usize,
+    address: u32,
+    value: Value,
 }
 
-pub fn argument_type_string(arg: &Argument) -> String {
-    match *arg {
-        Argument::NULL => String::from("NULL"),
-        Argument::Boolean(_) => String::from("BOOL"),
-        Argument::Byte(_) => String::from("BYTE"),
-        Argument::Int16(_) => String::from("INT16"),
-        Argument::Int32(_) => String::from("INT32"),
-        Argument::Float(_) => String::from("F32"),
-        Argument::Double(_) => String::from("F64"),
-        Argument::String(_) => String::from("STRING"),
-        Argument::ArgMarker => String::from("ARGMARKER"),
-        Argument::ScalarIntValue(_) => String::from("SCALARINT"),
-        Argument::ScalarDoubleValue(_) => String::from("SCALARF64"),
-        Argument::BooleanValue(_) => String::from("BOOLVALUE"),
-        Argument::StringValue(_) => String::from("STRINGVALUE"),
-    }
-}
-
-fn read_boolean(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    match byte_iter.next() {
-        Some(v) => Some(Argument::Boolean(*v != 0u8)),
-        None => None,
-    }
-}
-
-fn read_boolean_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    match byte_iter.next() {
-        Some(v) => Some(Argument::BooleanValue(*v != 0u8)),
-        None => None,
-    }
-}
-
-fn read_byte(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    match byte_iter.next() {
-        Some(v) => Some(Argument::Byte(*v as i8)),
-        None => None,
-    }
-}
-
-fn read_int16(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    let mut arr: [u8; 2] = [0; 2];
-
-    for i in 0..2 {
-        match byte_iter.next() {
-            Some(v) => arr[i] = *v,
-            None => return None,
+impl Argument {
+    pub fn new(value_type: usize, address: u32, value: Value) -> Argument {
+        Argument {
+            value_type,
+            address,
+            value,
         }
     }
 
-    return Some(Argument::Int16(i16::from_le_bytes(arr)));
-}
-
-fn read_int32(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    let mut arr: [u8; 4] = [0; 4];
-
-    for i in 0..4 {
-        match byte_iter.next() {
-            Some(v) => arr[i] = *v,
-            None => return None,
+    pub fn get_repr(&self) -> String {
+        match &self.value {
+            Value::NULL => String::from("NULL"),
+            Value::Boolean(b) => String::from(if *b { "true" } else { "false" }),
+            Value::Byte(b) => format!("{:#x}", b),
+            Value::Int16(i) => format!("{:#04x}", i),
+            Value::Int32(i) => format!("{:#06x}", i),
+            Value::Float(fl) => format!("{:.5}", fl),
+            Value::Double(d) => format!("{:.5}", d),
+            Value::String(s) => s.to_string(),
+            Value::ARGMARKER => String::from("ARGM"),
+            Value::ScalarIntValue(i) => format!("{:#06x}", i),
+            Value::ScalarDoubleValue(d) => format!("{:.5}", d),
+            Value::BooleanValue(b) => String::from(if *b { "true" } else { "false" }),
+            Value::StringValue(s) => s.to_string(),
         }
     }
 
-    return Some(Argument::Int32(i32::from_le_bytes(arr)));
-}
+    pub fn colored_repr(&self) -> ColoredString {
+        match &self.value {
+            Value::String(s) | Value::StringValue(s) => {
+                if s.starts_with("$") {
+                    let (_r, _g, _b) = VARIABLE_COLOR;
 
-fn read_scalar_int_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    let mut arr: [u8; 4] = [0; 4];
-
-    for i in 0..4 {
-        match byte_iter.next() {
-            Some(v) => arr[i] = *v,
-            None => return None,
-        }
-    }
-
-    return Some(Argument::ScalarIntValue(i32::from_le_bytes(arr)));
-}
-
-fn read_float(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    let mut arr: [u8; 4] = [0; 4];
-
-    for i in 0..4 {
-        match byte_iter.next() {
-            Some(v) => arr[i] = *v,
-            None => return None,
-        }
-    }
-
-    return Some(Argument::Float(f32::from_le_bytes(arr)));
-}
-
-fn read_double(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    let mut arr: [u8; 8] = [0; 8];
-
-    for i in 0..8 {
-        match byte_iter.next() {
-            Some(v) => arr[i] = *v,
-            None => return None,
-        }
-    }
-
-    return Some(Argument::Double(f64::from_le_bytes(arr)));
-}
-
-fn read_scalar_double_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    let mut arr: [u8; 8] = [0; 8];
-
-    for i in 0..8 {
-        match byte_iter.next() {
-            Some(v) => arr[i] = *v,
-            None => return None,
-        }
-    }
-
-    return Some(Argument::ScalarDoubleValue(f64::from_le_bytes(arr)));
-}
-
-fn read_string(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    let len = match byte_iter.next() {
-        Some(v) => *v,
-        None => return None,
-    };
-
-    let mut internal = String::with_capacity(len as usize);
-
-    for _ in 0..len {
-        match byte_iter.next() {
-            Some(v) => internal.push(*v as char),
-            None => return None,
-        }
-    }
-
-    return Some(Argument::String(internal));
-}
-
-fn read_string_value(byte_iter: &mut Peekable<Iter<u8>>) -> Option<Argument> {
-    match read_string(byte_iter) {
-        Some(v) => match v {
-            Argument::String(s) => Some(Argument::StringValue(s)),
-            _ => None,
-        },
-        None => None,
-    }
-}
-
-pub fn read_argument(
-    byte_iter: &mut Peekable<Iter<u8>>,
-) -> Result<(Argument, i32), Box<dyn Error>> {
-    let arg_type = match byte_iter.next() {
-        Some(v) => v,
-        None => return Err("Reached EOF before the argument section eneded".into()),
-    };
-
-    let mut argument_len: i32 = 0;
-
-    let possible_argument = match arg_type {
-        0 => Some(Argument::NULL),
-        1 => { argument_len = 1; read_boolean(byte_iter)},
-        2 => { argument_len = 1; read_byte(byte_iter)},
-        3 => { argument_len = 2; read_int16(byte_iter)},
-        4 => { argument_len = 4; read_int32(byte_iter)},
-        5 => { argument_len = 4; read_float(byte_iter)},
-        6 => { argument_len = 8; read_double(byte_iter)},
-        7 => read_string(byte_iter),
-        8 => Some(Argument::ArgMarker),
-        9 => { argument_len = 4; read_scalar_int_value(byte_iter)},
-        10 => { argument_len = 8; read_scalar_double_value(byte_iter)},
-        11 => { argument_len = 1; read_boolean_value(byte_iter)},
-        12 => read_string_value(byte_iter),
-        _ => {
-            return Err("Unrecognized argument type encountered in section. Is the file corrupt or this tool outdated?".into())
-        }
-    };
-
-    match possible_argument {
-        Some(v) => {
-            match &v {
-                Argument::String(s) => {
-                    argument_len += s.len() as i32 + 1;
+                    format!("{}", s).truecolor(_r, _g, _b)
+                } else {
+                    s.normal()
                 }
-                Argument::StringValue(s) => {
-                    argument_len += s.len() as i32 + 1;
-                }
-                _ => (),
-            };
-
-            Ok((v, argument_len + 1))
+            }
+            _ => self.get_repr().normal(),
         }
-        None => return Err("Reached EOF before the argument section eneded".into()),
+    }
+
+    pub fn get_type_str(&self) -> String {
+        String::from(VALUE_TYPES[self.value_type])
+    }
+
+    pub fn get_address(&self) -> u32 {
+        self.address
+    }
+
+    pub fn get_value(&self) -> &Value {
+        &self.value
+    }
+
+    pub fn get_type(&self) -> usize {
+        self.value_type
+    }
+
+    pub fn read(reader: &mut KSMFileReader) -> Result<Argument, Box<dyn Error>> {
+        let address = reader.get_current_index() - 4;
+
+        let value_type: usize = reader.next()? as usize;
+
+        let value = match value_type {
+            0 => Value::NULL,
+            1 => Value::Boolean(reader.read_boolean()?),
+            2 => Value::Byte(reader.read_byte()?),
+            3 => Value::Int16(reader.read_int16()?),
+            4 => Value::Int32(reader.read_int32()?),
+            5 => Value::Float(reader.read_float()?),
+            6 => Value::Double(reader.read_double()?),
+            7 => Value::String(reader.read_string()?),
+            8 => Value::ARGMARKER,
+            9 => Value::ScalarIntValue(reader.read_int32()?),
+            10 => Value::ScalarDoubleValue(reader.read_double()?),
+            11 => Value::BooleanValue(reader.read_boolean()?),
+            12 => Value::StringValue(reader.read_string()?),
+            _ => return Err(format!("Unknown argument type encountered: {:x}", value_type).into()),
+        };
+
+        // let (value, len) = match value_type {
+        //     0 => (Value::NULL, 1),
+        //     1 => (Value::Boolean(reader.read_boolean()?), 2),
+        //     2 => (Value::Byte(reader.read_byte()?), 2),
+        //     3 => (Value::Int16(reader.read_int16()?), 3),
+        //     4 => (Value::Int32(reader.read_int32()?), 4),
+        //     5 => (Value::Float(reader.read_float()?), 4),
+        //     6 => (Value::Double(reader.read_double()?), 8),
+        //     7 => (Value::String(reader.read_string()?), 1),
+        //     8 => (Value::ARGMARKER, 1),
+        //     9 => (Value::ScalarIntValue(reader.read_int32()?), 4),
+        //     10 => (Value::ScalarDoubleValue(reader.read_double()?), 8),
+        //     11 => (Value::BooleanValue(reader.read_boolean()?), 2),
+        //     12 => (Value::StringValue(reader.read_string()?), 1),
+        //     _ => return Err(format!("Unkown argument type encountered: {}", value_type).into())
+        // };
+
+        // // Add the length of the string if the value is a string type
+        // len += match value {
+        //     Value::String(s) => s.len() as u32,
+        //     Value::StringValue(s) => s.len() as u32,
+        //     _ => 0
+        // };
+
+        // Ok( (Argument::new(value_type, address as u32, value), len) )
+
+        Ok(Argument::new(value_type, address as u32, value))
     }
 }

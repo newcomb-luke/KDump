@@ -1,6 +1,8 @@
 use clap::{App, Arg};
 use std::process;
 
+use kdump::{run, CLIConfig};
+
 fn main() {
     let matches = App::new("kDump Utility")
                             .version(kdump::VERSION)
@@ -70,7 +72,9 @@ fn main() {
                                 .long("show-no-addresses"))
                             .get_matches();
 
-    if let Err(e) = kdump::run(matches) {
+    let config = CLIConfig::new(matches);
+
+    if let Err(e) = run(&config) {
         eprintln!("Application error: {}", e);
 
         process::exit(1);
