@@ -1,7 +1,7 @@
 use colored::*;
 use std::{collections::HashMap, error::Error};
 
-use crate::{Argument, Instr, KSMFileReader, Value, ADDRESS_COLOR, VARIABLE_COLOR, LINE_COLOR};
+use crate::{Argument, Instr, KSMFileReader, Value, ADDRESS_COLOR, VARIABLE_COLOR, LINE_COLOR, TYPE_COLOR};
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum SectionType {
@@ -200,18 +200,28 @@ impl CodeSection {
                         let operands_length = (instruction.size() - 1) as u32;
 
                         let state = match addr {
-                            addr if addr == range_end && range_start == range_end => 3,
-                            addr if addr == range_start => 0,
+                            addr if addr == range_start && range_start + operands_length == range_end => 3,
+                            addr if addr == range_start => {
+
+                                let next_instruction = self.instructions.get(index + 1).unwrap();
+
+                                if addr + operands_length + next_instruction.size() as u32 == range_end {
+                                    5
+                                }
+                                else {
+                                    0
+                                }
+                            },
+                            addr if addr + operands_length == range_end => 4,
                             addr if middle_range >= addr && (middle_range <= (addr + operands_length)) => 2,
                             addr if addr + operands_length < range_end && addr > range_start => 1,
-                            addr if addr + operands_length == range_end => 4,
-                            _ => 5,
+                            _ => 6,
                         };
 
-                        // println!("Addr: {}, State: {}, Line: {}, range: [{:06x}, {:06x}]", addr, state, entry.line_number, range_start, range_end);
+                        // println!("Addr: {:x}, Addr+Len: {:x}, State: {}, Line: {}, range: [{:06x}, {:06x}]", addr, addr + operands_length, state, entry.line_number, range_start, range_end);
 
-                        let before_text = if state == 2 {
-                            format!("  Line {} ", entry.line_number)
+                        let before_text = if state == 2 || state == 5 || state == 3 {
+                            format!("   {} ", entry.line_number)
                         }
                         else {
                             String::from("")
@@ -221,9 +231,9 @@ impl CodeSection {
                             0 => " ╔═ ",
                             1 => " ║  ",
                             2 => "═╣  ",
-                            3 => "════",
+                            3 => "═══ ",
                             4 => " ╚═ ",
-                            5 => "═╩═ ",
+                            5 => "═╦═ ",
                             _ => "    ",
                         });
 
@@ -232,9 +242,9 @@ impl CodeSection {
                         print!(
                             "{}",
                             format!(
-                                "{:<1$}{2}",
+                                "{:>1$}{2}",
                                 before_text,
-                                max_line_number_width + 8,
+                                max_line_number_width + 4,
                                 after_text
                             )
                             .truecolor(_r, _g, _b)
@@ -483,11 +493,13 @@ impl ArgumentSection {
 
         println!("  {:<12}{:<24}{}", "Type", "Value", "Index");
 
+        let (_r, _g, _b) = TYPE_COLOR;
+
         for argument in self.argument_list.iter() {
             println!(
                 "  {:<12}{:<24}{:>}",
-                argument.get_type_str(),
-                argument.get_repr(),
+                argument.get_type_str().truecolor(_r, _g, _b),
+                argument.colored_repr(),
                 argument.get_address()
             );
         }

@@ -20,6 +20,7 @@ pub static LINE_COLOR: (u8, u8, u8) = (201, 155, 87);
 pub static ADDRESS_COLOR: (u8, u8, u8) = (133, 80, 179);
 pub static MNEMONIC_COLOR: (u8, u8, u8) = (201, 87, 87);
 pub static VARIABLE_COLOR: (u8, u8, u8) = (255, 147, 147);
+pub static TYPE_COLOR: (u8, u8, u8) = (129, 181, 154);
 
 pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
     println!("kDump version {}", VERSION);
