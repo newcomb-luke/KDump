@@ -302,9 +302,9 @@ impl CodeSection {
                 let argument = argument_section.get_argument(*operand);
 
                 if argument.is_variable() {
-                    term.write(&argument.get_repr())?;
-                } else {
                     term.write_colored(&argument.get_repr(), &variable_color)?;
+                } else {
+                    term.write(&argument.get_repr())?;
                 }
 
                 if index < instruction.num_operands() - 1 {
