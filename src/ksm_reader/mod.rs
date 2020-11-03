@@ -115,6 +115,9 @@ impl KSMFile {
                 offset += section.size();
             }
         } else if config.disassemble_symbol {
+
+            let mut offset = 0;
+
             for section in self.code_sections.iter() {
                 // Checks if the section contains the symbol that was speciifed by the command line argument
                 if section.contains(
@@ -124,7 +127,7 @@ impl KSMFile {
                     && config.disassemble_symbol_value.eq_ignore_ascii_case("main"))
                 {
                     section.dump(
-                        0,
+                        offset,
                         !config.show_no_addresses,
                         !config.show_no_raw_insn,
                         config.line_numbers,
@@ -134,6 +137,8 @@ impl KSMFile {
 
                     break;
                 }
+
+                offset += section.size();
             }
         }
 
