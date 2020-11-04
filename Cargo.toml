@@ -1,8 +1,12 @@
 [package]
 name = "kdump"
 version = "0.1.0"
-authors = ["newcomb-luke <newcomb.luke@protonmail.com>"]
+authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
 edition = "2018"
+license = "GPLv3"
+description = "A small utility that disassembles and reads KSM and KO files for use with KerbalOS."
+homepage = "https://github.com/newcomb-luke/KDump"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
