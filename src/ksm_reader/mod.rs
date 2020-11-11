@@ -101,11 +101,13 @@ impl KSMFile {
 
         if config.full_contents || config.disassemble {
             let mut offset = 0;
+            let mut instruction_index = 1;
 
             for section in self.code_sections.iter() {
                 section.dump(
                     offset,
-                    !config.show_no_addresses,
+                    instruction_index,
+                    !config.show_no_labels,
                     !config.show_no_raw_insn,
                     config.line_numbers,
                     &self.argument_section,
@@ -113,9 +115,11 @@ impl KSMFile {
                 )?;
 
                 offset += section.size();
+                instruction_index += section.number_real_instructions();
             }
         } else if config.disassemble_symbol {
             let mut offset = 0;
+            let mut instruction_index = 1;
 
             for section in self.code_sections.iter() {
                 // Checks if the section contains the symbol that was speciifed by the command line argument
@@ -125,7 +129,8 @@ impl KSMFile {
                 {
                     section.dump(
                         offset,
-                        !config.show_no_addresses,
+                        instruction_index,
+                        !config.show_no_labels,
                         !config.show_no_raw_insn,
                         config.line_numbers,
                         &self.argument_section,
@@ -136,6 +141,7 @@ impl KSMFile {
                 }
 
                 offset += section.size();
+                instruction_index += section.number_real_instructions();
             }
         }
 

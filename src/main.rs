@@ -67,9 +67,9 @@ fn main() {
                             .arg(Arg::with_name("show_no_raw_insn")
                                 .help("When disassembling, enables showing the raw bytes that make up each instruction")
                                 .long("show-no-raw-insn"))
-                            .arg(Arg::with_name("show_no_addresses")
-                                .help("When disassembling, enables showing the address of each instruction in the object file.")
-                                .long("show-no-addresses"))
+                            .arg(Arg::with_name("show_no_labels")
+                                .help("When disassembling, enables showing the label of each instruction in the object file.")
+                                .long("show-no-labels"))
                             .get_matches();
 
     let config = CLIConfig::new(matches);

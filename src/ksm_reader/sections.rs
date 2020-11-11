@@ -18,6 +18,7 @@ pub struct CodeSection {
     instructions: Vec<Instr>,
     size: u32,
     index_to_offset: HashMap<usize, u32>,
+    num_real_instructions: u32,
 }
 
 impl CodeSection {
@@ -25,11 +26,17 @@ impl CodeSection {
         let mut index_to_offset: HashMap<usize, u32> = HashMap::with_capacity(instructions.len());
 
         let mut offset = 0;
+        let mut num_real_instructions = 0;
 
         for (index, instruction) in instructions.iter().enumerate() {
             index_to_offset.insert(index, offset);
 
             offset += instruction.size() as u32;
+
+            // If it is not a labelreset instruction
+            if instruction.get_opcode() != 0xf0 {
+                num_real_instructions += 1;
+            }
         }
 
         CodeSection {
@@ -37,6 +44,7 @@ impl CodeSection {
             instructions,
             size,
             index_to_offset,
+            num_real_instructions
         }
     }
 
@@ -103,6 +111,10 @@ impl CodeSection {
         self.size
     }
 
+    pub fn number_real_instructions(&self) -> u32 {
+        self.num_real_instructions
+    }
+
     pub fn get_offset(&self, index: usize) -> u32 {
         *self.index_to_offset.get(&index).unwrap()
     }
@@ -157,7 +169,8 @@ impl CodeSection {
     pub fn dump(
         &self,
         global_offset: u32,
-        show_addr: bool,
+        global_instruction_index: u32,
+        show_labels: bool,
         show_raw: bool,
         show_line_numbers: bool,
         argument_section: &ArgumentSection,
@@ -192,7 +205,9 @@ impl CodeSection {
 
         let mut addr = offset;
 
-        
+        let mut instruction_index = global_instruction_index;
+
+        let mut label = format!("@{:06}", instruction_index);
 
         let mut variable_color = ColorSpec::new();
         variable_color.set_fg(Some(VARIABLE_COLOR));
@@ -281,15 +296,50 @@ impl CodeSection {
                 term.write(&String::from("  "))?;
             }
 
-            if show_addr {
-                term.write_colored(
-                    &format!(
-                        "{:06x}  ",
-                        offset + self.index_to_offset.get(&index).unwrap()
-                    ),
-                    &address_color
-                )?;
+            // So it turns out we only need to keep track of the actual "address" of the instruction for the debug section.
+            // This is very annoying because branch instructions use the labels of the instructions instead :)
+            // So this would be more useful showing that, so that is what it does now.
+
+            if show_labels {
+
+                // If it is a labelreset, then it doesn't really have a label, so just show nothing?
+                if instruction.get_opcode() == 0xf0 {
+                    term.write(&format!("{:08}", ""))?;
+                }
+                else {
+                    term.write_colored(&format!("{} ", label), &address_color)?;
+                }
             }
+
+            // If the instruction is a labelreset, reset the label.
+            if instruction.get_opcode() == 0xf0 {
+                label = match argument_section.get_argument(*instruction.get_operands().get(0).unwrap()).get_value() {
+                    Value::String(s) => s.to_owned(),
+                    _ => unreachable!()
+                };
+
+                // If it is something like @0013
+                if label.starts_with("@") {
+                    // Make the formatting all pretty by making @0013, @000013
+                    label.insert_str(1, "00");
+                }
+
+                // Get the first 6 characters of the label
+                // Might change this later
+                label.truncate(7);
+            } else {
+                label = format!("@{:>06}", instruction_index+1);
+            }
+
+            // if show_addr {
+            //     term.write_colored(
+            //         &format!(
+            //             "{:06x}  ",
+            //             offset + self.index_to_offset.get(&index).unwrap()
+            //         ),
+            //         &address_color
+            //     )?;
+            // }
 
             if show_raw {
                 term.write(&instruction.raw_str())?;
@@ -315,6 +365,12 @@ impl CodeSection {
             term.writeln(&String::from(""))?;
 
             addr += instruction.size() as u32;
+
+            // Label resets don't count as an instruction so don't count it here
+            if instruction.get_opcode() != 0xf0 {
+                instruction_index += 1;
+            }
+            
         }
 
         Ok(())

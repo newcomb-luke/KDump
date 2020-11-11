@@ -74,7 +74,7 @@ pub struct CLIConfig {
     pub info: bool,
     pub demangle: bool,
     pub show_no_raw_insn: bool,
-    pub show_no_addresses: bool,
+    pub show_no_labels: bool,
 }
 
 impl CLIConfig {
@@ -99,7 +99,7 @@ impl CLIConfig {
             info: matches.is_present("info"),
             demangle: matches.is_present("demangle"),
             show_no_raw_insn: matches.is_present("show_no_raw_insn"),
-            show_no_addresses: matches.is_present("show_no_addresses"),
+            show_no_labels: matches.is_present("show_no_labels"),
         }
     }
 }
