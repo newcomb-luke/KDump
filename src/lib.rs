@@ -19,7 +19,7 @@ pub use coloredout::Terminal;
 
 pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
-pub static VERSION: &'static str = "1.0.0";
+pub static VERSION: &'static str = "1.1.0";
 
 pub static LINE_COLOR: Color = Color::Rgb(201, 155, 87);
 pub static ADDRESS_COLOR: Color = Color::Rgb(133, 80, 179);
