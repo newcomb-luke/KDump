@@ -61,38 +61,23 @@ impl CodeSection {
             size += instructions.last().unwrap().size() as u32;
         }
 
-        if section_type == SectionType::FUNCTION {
-            // %I, %M
-            reader.pop(4)?;
-        } else if section_type == SectionType::INITIALIZATION {
-            // %M
-            reader.pop(2)?;
-        }
-
         Ok(CodeSection::new(section_type, instructions, size))
     }
 
     pub fn read_section_type(reader: &mut KSMFileReader) -> Result<SectionType, Box<dyn Error>> {
-        let mut tries = 0;
-
-        if reader.next()? != b'%' || reader.next()? != b'F' {
-            return Err(format!(
-                "Expected start of function section at index {}",
-                reader.get_current_index()
-            )
-            .into());
-        }
+        let mut last_char = '\0';
 
         while reader.peek()? == b'%' {
-            // Pop off that %[whatever]
-            reader.pop(2)?;
-            tries += 1;
+            // Pop off that %
+            reader.pop(1)?;
+            // Store the next character
+            last_char = reader.next()? as char;
         }
 
-        Ok(match tries {
-            0 => SectionType::FUNCTION,
-            1 => SectionType::INITIALIZATION,
-            2 => SectionType::MAIN,
+        Ok(match last_char {
+            'F' => SectionType::FUNCTION,
+            'I' => SectionType::INITIALIZATION,
+            'M' => SectionType::MAIN,
             _ => {
                 return Err("Expected code section, none found!".into());
             }
@@ -239,9 +224,9 @@ impl CodeSection {
                                 3
                             }
                             addr if addr == range_start => {
-                                let next_instruction = self.instructions.get(index + 1).unwrap();
+                                let next_instruction = self.instructions.get(index + 1);
 
-                                if addr + operands_length + next_instruction.size() as u32
+                                if next_instruction.is_some() && addr + operands_length + next_instruction.unwrap().size() as u32
                                     == range_end
                                 {
                                     5
@@ -287,8 +272,16 @@ impl CodeSection {
                             &line_color,
                         )?;
                     }
-
                     None => {
+                        term.write_colored(
+                            &format!(
+                                "{:>1$}{2}",
+                                "",
+                                max_line_number_width + 4,
+                                ""
+                            ),
+                            &line_color,
+                        )?;
                         term.write(&String::from("    "))?;
                     }
                 };
