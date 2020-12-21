@@ -17,13 +17,13 @@ impl Terminal {
         }
     }
 
-    pub fn write(&mut self, text: &String) -> Result<(), Box<dyn Error>> {
+    pub fn write(&mut self, text: &str) -> Result<(), Box<dyn Error>> {
         write!(&mut self.stream, "{}", text)?;
 
         Ok(())
     }
 
-    pub fn writeln(&mut self, text: &String) -> Result<(), Box<dyn Error>> {
+    pub fn writeln(&mut self, text: &str) -> Result<(), Box<dyn Error>> {
         writeln!(&mut self.stream, "{}", text)?;
 
         Ok(())
@@ -31,7 +31,7 @@ impl Terminal {
 
     pub fn write_colored(
         &mut self,
-        text: &String,
+        text: &str,
         color: &ColorSpec,
     ) -> Result<(), Box<dyn Error>> {
         self.stream.set_color(color)?;
@@ -45,7 +45,7 @@ impl Terminal {
 
     pub fn writeln_colored(
         &mut self,
-        text: &String,
+        text: &str,
         color: &ColorSpec,
     ) -> Result<(), Box<dyn Error>> {
         self.stream.set_color(color)?;

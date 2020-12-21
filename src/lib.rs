@@ -19,6 +19,11 @@ pub use ksm_reader::{
 mod coloredout;
 pub use coloredout::Terminal;
 
+mod ko_output;
+pub use ko_output::{KOFileDebug};
+
+use kerbalobjects::{KOFileReader, KOFile};
+
 pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
 pub static VERSION: &'static str = "1.1.4";
@@ -30,8 +35,10 @@ pub static VARIABLE_COLOR: Color = Color::Rgb(255, 147, 147);
 pub static TYPE_COLOR: Color = Color::Rgb(129, 181, 154);
 
 pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
+    // Create the default colorspec as no color
     let no_color = ColorSpec::new();
 
+    // Create a new "Terminal" output object
     let mut term = Terminal::new(no_color);
 
     term.writeln(&format!("kDump version {}", VERSION))?;
@@ -42,6 +49,7 @@ pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
     let file_type = determine_file_type(&raw_contents)?;
 
     match file_type {
+        // If this is a compiled kerbal machine code file
         FileType::KSM => {
             let mut ksm_reader = KSMFileReader::new(raw_contents)?;
 
@@ -51,15 +59,28 @@ pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
 
             Ok(())
         }
+        // If it is a kerbal object file
         FileType::KO => {
-            return Err("KerbalObject file dumping has not yet been implemented.".into());
+
+            let mut ko_reader = KOFileReader::new(raw_contents)?;
+
+            let ko_file =  KOFile::read(&mut ko_reader)?;
+
+            let mut ko_debug = KOFileDebug::new(ko_file);
+
+            ko_debug.dump(&config)?;
+
+            Ok(())
         }
+        // If we have no idea what the heck the file is
         FileType::UNKNOWN => {
             return Err("File type not recognized.".into());
         }
     }
 }
 
+/// This structure controls all the settings that make this program perform differently
+/// These represent command line arguments read in by clap
 pub struct CLIConfig {
     pub file_path: String,
     pub disassemble: bool,
@@ -69,8 +90,9 @@ pub struct CLIConfig {
     pub argument_section: bool,
     pub line_numbers: bool,
     pub section_headers: bool,
+    pub data: bool,
     pub full_contents: bool,
-    pub stabs: bool,
+    pub stab: bool,
     pub syms: bool,
     pub all_headers: bool,
     pub info: bool,
@@ -80,6 +102,7 @@ pub struct CLIConfig {
 }
 
 impl CLIConfig {
+    /// Creates a new CLIConfig using the matches output of clap
     pub fn new(matches: ArgMatches) -> CLIConfig {
         CLIConfig {
             file_path: String::from(matches.value_of("INPUT").unwrap()),
@@ -94,8 +117,9 @@ impl CLIConfig {
             argument_section: matches.is_present("argument_section"),
             line_numbers: matches.is_present("line_numbers"),
             section_headers: matches.is_present("section_headers"),
+            data: matches.is_present("data"),
             full_contents: matches.is_present("full_contents"),
-            stabs: matches.is_present("stabs"),
+            stab: matches.is_present("stab"),
             syms: matches.is_present("syms"),
             all_headers: matches.is_present("all_headers"),
             info: matches.is_present("info"),

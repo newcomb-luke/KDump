@@ -112,32 +112,6 @@ impl Argument {
             _ => return Err(format!("Unknown argument type encountered: {:x}", value_type).into()),
         };
 
-        // let (value, len) = match value_type {
-        //     0 => (Value::NULL, 1),
-        //     1 => (Value::Boolean(reader.read_boolean()?), 2),
-        //     2 => (Value::Byte(reader.read_byte()?), 2),
-        //     3 => (Value::Int16(reader.read_int16()?), 3),
-        //     4 => (Value::Int32(reader.read_int32()?), 4),
-        //     5 => (Value::Float(reader.read_float()?), 4),
-        //     6 => (Value::Double(reader.read_double()?), 8),
-        //     7 => (Value::String(reader.read_string()?), 1),
-        //     8 => (Value::ARGMARKER, 1),
-        //     9 => (Value::ScalarIntValue(reader.read_int32()?), 4),
-        //     10 => (Value::ScalarDoubleValue(reader.read_double()?), 8),
-        //     11 => (Value::BooleanValue(reader.read_boolean()?), 2),
-        //     12 => (Value::StringValue(reader.read_string()?), 1),
-        //     _ => return Err(format!("Unkown argument type encountered: {}", value_type).into())
-        // };
-
-        // // Add the length of the string if the value is a string type
-        // len += match value {
-        //     Value::String(s) => s.len() as u32,
-        //     Value::StringValue(s) => s.len() as u32,
-        //     _ => 0
-        // };
-
-        // Ok( (Argument::new(value_type, address as u32, value), len) )
-
         Ok(Argument::new(value_type, address as u32, value))
     }
 }
