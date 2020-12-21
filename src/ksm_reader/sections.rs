@@ -44,7 +44,7 @@ impl CodeSection {
             instructions,
             size,
             index_to_offset,
-            num_real_instructions
+            num_real_instructions,
         }
     }
 
@@ -104,7 +104,11 @@ impl CodeSection {
         *self.index_to_offset.get(&index).unwrap()
     }
 
-    pub fn contains(&self, symbol: &String, argument_section: &ArgumentSection) -> Result<bool, Box<dyn Error>> {
+    pub fn contains(
+        &self,
+        symbol: &String,
+        argument_section: &ArgumentSection,
+    ) -> Result<bool, Box<dyn Error>> {
         for instruction in self.instructions.iter() {
             for operand in instruction.get_operands().iter() {
                 let argument = argument_section.get_argument(*operand)?;
@@ -123,7 +127,10 @@ impl CodeSection {
         Ok(false)
     }
 
-    pub fn get_function_name(&self, argument_section: &ArgumentSection) -> Result<String, Box<dyn Error>> {
+    pub fn get_function_name(
+        &self,
+        argument_section: &ArgumentSection,
+    ) -> Result<String, Box<dyn Error>> {
         let mut func_name = String::new();
 
         let first_instruction = self.instructions.get(0);
@@ -133,7 +140,9 @@ impl CodeSection {
                 // Tests if the first instruction is a lbrt (LABELRESET) instruction
                 if instruction.get_opcode() == 0xf0 {
                     // Gets the label from inside the instruction's argument
-                    let label = (argument_section.get_argument(*instruction.get_operands().get(0).unwrap())?).get_repr();
+                    let label = (argument_section
+                        .get_argument(*instruction.get_operands().get(0).unwrap())?)
+                    .get_repr();
 
                     // If it is a KS generated function
                     if label.contains("`") {
@@ -159,7 +168,6 @@ impl CodeSection {
         argument_section: &ArgumentSection,
         debug_section: &DebugSection,
     ) -> Result<(), Box<dyn Error>> {
-
         let mut term = Terminal::new(ColorSpec::new());
 
         let mut variable_color = ColorSpec::new();
@@ -176,10 +184,7 @@ impl CodeSection {
         if self.section_type != SectionType::FUNCTION {
             term.writeln(&format!("\n{:?}:", self.section_type))?;
         } else {
-            term.write(&format!(
-                "\n{:?}",
-                self.section_type
-            ))?;
+            term.write(&format!("\n{:?}", self.section_type))?;
 
             term.write_colored(&self.get_function_name(argument_section)?, &variable_color)?;
 
@@ -224,8 +229,11 @@ impl CodeSection {
                             addr if addr == range_start => {
                                 let next_instruction = self.instructions.get(index + 1);
 
-                                if next_instruction.is_some() && addr + operands_length + next_instruction.unwrap().size() as u32
-                                    == range_end
+                                if next_instruction.is_some()
+                                    && addr
+                                        + operands_length
+                                        + next_instruction.unwrap().size() as u32
+                                        == range_end
                                 {
                                     5
                                 } else {
@@ -272,12 +280,7 @@ impl CodeSection {
                     }
                     None => {
                         term.write_colored(
-                            &format!(
-                                "{:>1$}{2}",
-                                "",
-                                max_line_number_width + 4,
-                                ""
-                            ),
+                            &format!("{:>1$}{2}", "", max_line_number_width + 4, ""),
                             &line_color,
                         )?;
                         term.write(&String::from("    "))?;
@@ -292,21 +295,22 @@ impl CodeSection {
             // So this would be more useful showing that, so that is what it does now.
 
             if show_labels {
-
                 // If it is a labelreset, then it doesn't really have a label, so just show nothing?
                 if instruction.get_opcode() == 0xf0 {
                     term.write(&format!("{:08}", ""))?;
-                }
-                else {
+                } else {
                     term.write_colored(&format!("{} ", label), &address_color)?;
                 }
             }
 
             // If the instruction is a labelreset, reset the label.
             if instruction.get_opcode() == 0xf0 {
-                label = match argument_section.get_argument(*instruction.get_operands().get(0).unwrap())?.get_value() {
+                label = match argument_section
+                    .get_argument(*instruction.get_operands().get(0).unwrap())?
+                    .get_value()
+                {
                     Value::String(s) => s.to_owned(),
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 };
 
                 // If it is something like @0013
@@ -318,17 +322,19 @@ impl CodeSection {
                 // Get the first 6 characters of the label
                 label.truncate(7);
             } else {
-                label = format!("@{:>06}", instruction_index+1);
+                label = format!("@{:>06}", instruction_index + 1);
             }
 
             if show_raw {
                 term.write(&instruction.raw_str())?;
             }
 
-            term.write_colored(&format!("{:<4} ", Instr::get_mnemonic(&instruction)), &mnemonic_color)?;
+            term.write_colored(
+                &format!("{:<4} ", Instr::get_mnemonic(&instruction)),
+                &mnemonic_color,
+            )?;
 
             for (index, operand) in instruction.get_operands().iter().enumerate() {
-
                 let argument = argument_section.get_argument(*operand)?;
 
                 if argument.is_variable() {
@@ -350,7 +356,6 @@ impl CodeSection {
             if instruction.get_opcode() != 0xf0 {
                 instruction_index += 1;
             }
-            
         }
 
         Ok(())
@@ -429,7 +434,6 @@ impl DebugSection {
     }
 
     pub fn dump(&self) -> Result<(), Box<dyn Error>> {
-
         let mut term = Terminal::new(ColorSpec::new());
 
         term.writeln(&String::from("\nDebug section:"))?;
@@ -443,7 +447,6 @@ impl DebugSection {
             ))?;
 
             for (range_start, range_end) in entry.ranges.iter() {
-
                 term.write(&format!(" [{:06x}, {:06x}]", range_start, range_end))?;
             }
 
@@ -532,15 +535,23 @@ impl ArgumentSection {
     }
 
     pub fn get_argument(&self, addr: u32) -> Result<&Argument, Box<dyn Error>> {
-        match self.argument_list
-            .get(match self.addr_to_index.get(&addr) {
-                Some(index) => *index,
-                None => { return Err(format!("Argument at address {} not found in argument list map", addr).into()) },
-            })
-            {
-                Some(argument) => Ok(argument),
-                None => Err(format!("Argument at address {} not found in the argument section.", addr).into()),
+        match self.argument_list.get(match self.addr_to_index.get(&addr) {
+            Some(index) => *index,
+            None => {
+                return Err(format!(
+                    "Argument at address {} not found in argument list map",
+                    addr
+                )
+                .into())
             }
+        }) {
+            Some(argument) => Ok(argument),
+            None => Err(format!(
+                "Argument at address {} not found in the argument section.",
+                addr
+            )
+            .into()),
+        }
     }
 
     pub fn get_addr_bytes(&self) -> u8 {
@@ -567,10 +578,12 @@ impl ArgumentSection {
     }
 
     pub fn dump(&self) -> Result<(), Box<dyn Error>> {
-
         let mut term = Terminal::new(ColorSpec::new());
 
-        term.writeln(&format!("\nArgument section {} byte indexing:", self.addr_bytes))?;
+        term.writeln(&format!(
+            "\nArgument section {} byte indexing:",
+            self.addr_bytes
+        ))?;
 
         term.writeln(&format!("  {:<12}{:<24}{}", "Type", "Value", "Index"))?;
 

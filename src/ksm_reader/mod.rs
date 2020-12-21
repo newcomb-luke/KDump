@@ -5,7 +5,7 @@ use std::io::Read;
 use termcolor::ColorSpec;
 
 mod sections;
-pub use sections::{ArgumentSection, CodeSection, DebugSection, DebugEntry, SectionType};
+pub use sections::{ArgumentSection, CodeSection, DebugEntry, DebugSection, SectionType};
 
 use crate::{CLIConfig, Terminal, Value};
 
@@ -86,7 +86,6 @@ impl KSMFile {
     }
 
     pub fn dump(&self, config: &CLIConfig) -> Result<(), Box<dyn Error>> {
-
         let mut term = Terminal::new(ColorSpec::new());
 
         if config.info {

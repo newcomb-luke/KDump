@@ -12,7 +12,9 @@ mod fio;
 use fio::{determine_file_type, FileType};
 
 mod ksm_reader;
-pub use ksm_reader::{ArgumentSection, CodeSection, DebugSection, DebugEntry, KSMFile, KSMFileReader, SectionType};
+pub use ksm_reader::{
+    ArgumentSection, CodeSection, DebugEntry, DebugSection, KSMFile, KSMFileReader, SectionType,
+};
 
 mod coloredout;
 pub use coloredout::Terminal;
