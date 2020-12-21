@@ -316,21 +316,10 @@ impl CodeSection {
                 }
 
                 // Get the first 6 characters of the label
-                // Might change this later
                 label.truncate(7);
             } else {
                 label = format!("@{:>06}", instruction_index+1);
             }
-
-            // if show_addr {
-            //     term.write_colored(
-            //         &format!(
-            //             "{:06x}  ",
-            //             offset + self.index_to_offset.get(&index).unwrap()
-            //         ),
-            //         &address_color
-            //     )?;
-            // }
 
             if show_raw {
                 term.write(&instruction.raw_str())?;
@@ -370,14 +359,14 @@ impl CodeSection {
 
 pub struct DebugSection {
     range_size: u8,
-    max_line_number: u16,
+    max_line_number: i16,
     debug_entries: Vec<DebugEntry>,
 }
 
 impl DebugSection {
     pub fn new(
         range_size: u8,
-        max_line_number: u16,
+        max_line_number: i16,
         debug_entries: Vec<DebugEntry>,
     ) -> DebugSection {
         DebugSection {
@@ -435,7 +424,7 @@ impl DebugSection {
         &self.debug_entries
     }
 
-    pub fn get_max_line_number(&self) -> u16 {
+    pub fn get_max_line_number(&self) -> i16 {
         self.max_line_number
     }
 
@@ -466,13 +455,13 @@ impl DebugSection {
 }
 
 pub struct DebugEntry {
-    pub line_number: u16,
+    pub line_number: i16,
     pub number_ranges: usize,
     pub ranges: Vec<(u32, u32)>,
 }
 
 impl DebugEntry {
-    pub fn new(line_number: u16, number_ranges: usize, ranges: Vec<(u32, u32)>) -> DebugEntry {
+    pub fn new(line_number: i16, number_ranges: usize, ranges: Vec<(u32, u32)>) -> DebugEntry {
         DebugEntry {
             line_number,
             number_ranges,
@@ -481,7 +470,7 @@ impl DebugEntry {
     }
 
     pub fn read(reader: &mut KSMFileReader) -> Result<DebugEntry, Box<dyn Error>> {
-        let line_number = reader.read_int16()? as u16;
+        let line_number = reader.read_int16()? as i16;
 
         let number_ranges = reader.next()? as usize;
 
