@@ -123,7 +123,7 @@ impl KSMFile {
 
             for section in self.code_sections.iter() {
                 // Checks if the section contains the symbol that was speciifed by the command line argument
-                if section.contains(&config.disassemble_symbol_value, &self.argument_section)
+                if section.contains(&config.disassemble_symbol_value, &self.argument_section)?
                     || (section.get_type() == SectionType::MAIN
                         && config.disassemble_symbol_value.eq_ignore_ascii_case("main"))
                 {
@@ -265,9 +265,9 @@ impl KSMFileReader {
         Ok(match bytes {
             0 => panic!("One should never try to read 0 bytes."),
             1 => self.next()? as u32,
-            2 => self.read_int16()? as u32,
-            3 => (self.read_int16()? as u32) + (self.next()? as u32) * 0x1_00_00u32,
-            4 => self.read_int32()? as u32,
+            2 => self.read_uint16_be()? as u32,
+            3 => (self.read_uint16_be()? as u32 * 0x010000) + self.next()? as u32,
+            4 => self.read_uint32_be()? as u32,
             _ => {
                 return Err(
                     "Currently reading more than 4 bytes at a time into an address is unsupported"
@@ -303,6 +303,26 @@ impl KSMFileReader {
         Ok(i16::from_le_bytes(arr))
     }
 
+    pub fn read_uint16(&mut self) -> Result<u16, Box<dyn Error>> {
+        let mut arr: [u8; 2] = [0u8; 2];
+
+        for i in 0..2 {
+            arr[i] = self.next()?;
+        }
+
+        Ok(u16::from_le_bytes(arr))
+    }
+
+    pub fn read_uint16_be(&mut self) -> Result<u16, Box<dyn Error>> {
+        let mut arr: [u8; 2] = [0u8; 2];
+
+        for i in 0..2 {
+            arr[i] = self.next()?;
+        }
+
+        Ok(u16::from_be_bytes(arr))
+    }
+
     pub fn read_int32(&mut self) -> Result<i32, Box<dyn Error>> {
         let mut arr: [u8; 4] = [0u8; 4];
 
@@ -311,6 +331,26 @@ impl KSMFileReader {
         }
 
         Ok(i32::from_le_bytes(arr))
+    }
+
+    pub fn read_uint32(&mut self) -> Result<u32, Box<dyn Error>> {
+        let mut arr: [u8; 4] = [0u8; 4];
+
+        for i in 0..4 {
+            arr[i] = self.next()?;
+        }
+
+        Ok(u32::from_le_bytes(arr))
+    }
+
+    pub fn read_uint32_be(&mut self) -> Result<u32, Box<dyn Error>> {
+        let mut arr: [u8; 4] = [0u8; 4];
+
+        for i in 0..4 {
+            arr[i] = self.next()?;
+        }
+
+        Ok(u32::from_be_bytes(arr))
     }
 
     pub fn read_float(&mut self) -> Result<f32, Box<dyn Error>> {

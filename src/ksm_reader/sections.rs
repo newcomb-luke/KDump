@@ -104,15 +104,15 @@ impl CodeSection {
         *self.index_to_offset.get(&index).unwrap()
     }
 
-    pub fn contains(&self, symbol: &String, argument_section: &ArgumentSection) -> bool {
+    pub fn contains(&self, symbol: &String, argument_section: &ArgumentSection) -> Result<bool, Box<dyn Error>> {
         for instruction in self.instructions.iter() {
             for operand in instruction.get_operands().iter() {
-                let argument = argument_section.get_argument(*operand);
+                let argument = argument_section.get_argument(*operand)?;
 
                 match argument.get_value() {
                     Value::String(s) | Value::StringValue(s) => {
                         if s.contains(symbol) {
-                            return true;
+                            return Ok(true);
                         }
                     }
                     _ => {}
@@ -120,10 +120,10 @@ impl CodeSection {
             }
         }
 
-        false
+        Ok(false)
     }
 
-    pub fn get_function_name(&self, argument_section: &ArgumentSection) -> String {
+    pub fn get_function_name(&self, argument_section: &ArgumentSection) -> Result<String, Box<dyn Error>> {
         let mut func_name = String::new();
 
         let first_instruction = self.instructions.get(0);
@@ -133,9 +133,7 @@ impl CodeSection {
                 // Tests if the first instruction is a lbrt (LABELRESET) instruction
                 if instruction.get_opcode() == 0xf0 {
                     // Gets the label from inside the instruction's argument
-                    let label = argument_section
-                        .get_argument(*instruction.get_operands().get(0).unwrap())
-                        .get_repr();
+                    let label = (argument_section.get_argument(*instruction.get_operands().get(0).unwrap())?).get_repr();
 
                     // If it is a KS generated function
                     if label.contains("`") {
@@ -148,7 +146,7 @@ impl CodeSection {
             None => {}
         }
 
-        func_name
+        Ok(func_name)
     }
 
     pub fn dump(
@@ -183,7 +181,7 @@ impl CodeSection {
                 self.section_type
             ))?;
 
-            term.write_colored(&self.get_function_name(argument_section), &variable_color)?;
+            term.write_colored(&self.get_function_name(argument_section)?, &variable_color)?;
 
             term.writeln(&String::from(":"))?;
         }
@@ -306,7 +304,7 @@ impl CodeSection {
 
             // If the instruction is a labelreset, reset the label.
             if instruction.get_opcode() == 0xf0 {
-                label = match argument_section.get_argument(*instruction.get_operands().get(0).unwrap()).get_value() {
+                label = match argument_section.get_argument(*instruction.get_operands().get(0).unwrap())?.get_value() {
                     Value::String(s) => s.to_owned(),
                     _ => unreachable!()
                 };
@@ -342,7 +340,7 @@ impl CodeSection {
 
             for (index, operand) in instruction.get_operands().iter().enumerate() {
 
-                let argument = argument_section.get_argument(*operand);
+                let argument = argument_section.get_argument(*operand)?;
 
                 if argument.is_variable() {
                     term.write_colored(&argument.get_repr(), &variable_color)?;
@@ -544,10 +542,16 @@ impl ArgumentSection {
         }
     }
 
-    pub fn get_argument(&self, addr: u32) -> &Argument {
-        self.argument_list
-            .get(*self.addr_to_index.get(&addr).unwrap())
-            .unwrap()
+    pub fn get_argument(&self, addr: u32) -> Result<&Argument, Box<dyn Error>> {
+        match self.argument_list
+            .get(match self.addr_to_index.get(&addr) {
+                Some(index) => *index,
+                None => { return Err(format!("Argument at address {} not found in argument list map", addr).into()) },
+            })
+            {
+                Some(argument) => Ok(argument),
+                None => Err(format!("Argument at address {} not found in the argument section.", addr).into()),
+            }
     }
 
     pub fn get_addr_bytes(&self) -> u8 {
