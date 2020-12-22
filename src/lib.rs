@@ -28,11 +28,11 @@ pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
 pub static VERSION: &'static str = "1.1.4";
 
-pub static LINE_COLOR: Color = Color::Rgb(201, 155, 87);
-pub static ADDRESS_COLOR: Color = Color::Rgb(133, 80, 179);
-pub static MNEMONIC_COLOR: Color = Color::Rgb(201, 87, 87);
-pub static VARIABLE_COLOR: Color = Color::Rgb(255, 147, 147);
-pub static TYPE_COLOR: Color = Color::Rgb(129, 181, 154);
+pub static ORANGE_COLOR: Color = Color::Rgb(201, 155, 87);
+pub static PURPLE_COLOR: Color = Color::Rgb(133, 80, 179);
+pub static DARK_RED_COLOR: Color = Color::Rgb(201, 87, 87);
+pub static LIGHT_RED_COLOR: Color = Color::Rgb(255, 147, 147);
+pub static GREEN_COLOR: Color = Color::Rgb(129, 181, 154);
 
 pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
     // Create the default colorspec as no color
@@ -92,7 +92,7 @@ pub struct CLIConfig {
     pub section_headers: bool,
     pub data: bool,
     pub full_contents: bool,
-    pub stab: bool,
+    pub stabs: bool,
     pub syms: bool,
     pub all_headers: bool,
     pub info: bool,
@@ -119,7 +119,7 @@ impl CLIConfig {
             section_headers: matches.is_present("section_headers"),
             data: matches.is_present("data"),
             full_contents: matches.is_present("full_contents"),
-            stab: matches.is_present("stab"),
+            stabs: matches.is_present("stabs"),
             syms: matches.is_present("syms"),
             all_headers: matches.is_present("all_headers"),
             info: matches.is_present("info"),

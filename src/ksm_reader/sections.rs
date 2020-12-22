@@ -1,8 +1,8 @@
 use std::{collections::HashMap, error::Error};
 
 use crate::{
-    Argument, Instr, KSMFileReader, Terminal, Value, ADDRESS_COLOR, LINE_COLOR, MNEMONIC_COLOR,
-    TYPE_COLOR, VARIABLE_COLOR,
+    Argument, Instr, KSMFileReader, Terminal, Value, PURPLE_COLOR, ORANGE_COLOR, DARK_RED_COLOR,
+    GREEN_COLOR, LIGHT_RED_COLOR,
 };
 use termcolor::ColorSpec;
 
@@ -171,7 +171,7 @@ impl CodeSection {
         let mut term = Terminal::new(ColorSpec::new());
 
         let mut variable_color = ColorSpec::new();
-        variable_color.set_fg(Some(VARIABLE_COLOR));
+        variable_color.set_fg(Some(LIGHT_RED_COLOR));
 
         let mut offset = global_offset;
 
@@ -198,16 +198,16 @@ impl CodeSection {
         let mut label = format!("@{:06}", instruction_index);
 
         let mut variable_color = ColorSpec::new();
-        variable_color.set_fg(Some(VARIABLE_COLOR));
+        variable_color.set_fg(Some(LIGHT_RED_COLOR));
 
         let mut mnemonic_color = ColorSpec::new();
-        mnemonic_color.set_fg(Some(MNEMONIC_COLOR));
+        mnemonic_color.set_fg(Some(DARK_RED_COLOR));
 
         let mut line_color = ColorSpec::new();
-        line_color.set_fg(Some(LINE_COLOR));
+        line_color.set_fg(Some(ORANGE_COLOR));
 
         let mut address_color = ColorSpec::new();
-        address_color.set_fg(Some(ADDRESS_COLOR));
+        address_color.set_fg(Some(PURPLE_COLOR));
 
         for (index, instruction) in self.instructions.iter().enumerate() {
             if show_line_numbers {
@@ -299,7 +299,7 @@ impl CodeSection {
                 if instruction.get_opcode() == 0xf0 {
                     term.write(&format!("{:08}", ""))?;
                 } else {
-                    term.write_colored(&format!("{} ", label), &address_color)?;
+                    term.write_colored(&format!("{:<7} ", label), &address_color)?;
                 }
             }
 
@@ -588,10 +588,10 @@ impl ArgumentSection {
         term.writeln(&format!("  {:<12}{:<24}{}", "Type", "Value", "Index"))?;
 
         let mut variable_color = ColorSpec::new();
-        variable_color.set_fg(Some(VARIABLE_COLOR));
+        variable_color.set_fg(Some(LIGHT_RED_COLOR));
 
         let mut type_color = ColorSpec::new();
-        type_color.set_fg(Some(TYPE_COLOR));
+        type_color.set_fg(Some(GREEN_COLOR));
 
         for argument in self.argument_list.iter() {
             term.write_colored(&format!("  {:<12}", argument.get_type_str()), &type_color)?;

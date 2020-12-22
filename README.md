@@ -16,17 +16,18 @@
     - [x] Full contents
         - [x] Debug section
 
-- [ ] KO File Support
-    - [ ] Disassemble
-        - [ ] Show addresses
-        - [ ] Show raw instructions
+- [x] KO File Support
+    - [x] Disassemble
+        - [x] Show addresses
+        - [x] Show raw instructions
         - [ ] Display line numbers
-        - [ ] Disassemble symbol
+        - [x] Disassemble symbol
         - [ ] Demangle symbols
-    - [ ] Info
-    - [ ] All headers
-        - [ ] File headers
-        - [ ] Section headers
-    - [ ] String tables
-    - [ ] Symbol tables
+    - [x] Info
+    - [x] All headers
+        - [x] File headers
+        - [x] Section headers
+    - [x] String tables
+    - [x] Symbol tables
     - [ ] Full contents
+        - [ ] Debug section
