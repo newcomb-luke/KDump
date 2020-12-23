@@ -26,7 +26,7 @@ use kerbalobjects::{KOFileReader, KOFile};
 
 pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
-pub static VERSION: &'static str = "1.2.4";
+pub static VERSION: &'static str = "1.2.6";
 
 pub static ORANGE_COLOR: Color = Color::Rgb(201, 155, 87);
 pub static PURPLE_COLOR: Color = Color::Rgb(133, 80, 179);
