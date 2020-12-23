@@ -176,11 +176,9 @@ impl KOFileDebug {
             // Loop through each string in the string table
             for (i, s) in table.get_strings().iter().enumerate() {
 
-                // Add the string's length to the count, adding +1 to account for the null byte
-                str_idx += 1 + s.len();
-
                 // Skip the first string, as it will always be null
                 if i == 0 {
+                    str_idx += 1;
                     continue;
                 }
 
@@ -191,6 +189,9 @@ impl KOFileDebug {
 
                 // Print the actual string itself
                 self.term.writeln_colored(&format!("  {}", s), &str_color)?;
+
+                // Add the string's length to the count, adding +1 to account for the null byte
+                str_idx += 1 + s.len();
             }
         }
 
