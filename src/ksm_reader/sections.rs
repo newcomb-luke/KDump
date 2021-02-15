@@ -72,6 +72,10 @@ impl CodeSection {
             reader.pop(1)?;
             // Store the next character
             last_char = reader.next()? as char;
+            // Check if the next two characters are %D
+            if reader.peek()? == b'%' && *reader.peek_count(2)?.get(1).unwrap() == b'D' {
+                break;
+            }
         }
 
         Ok(match last_char {
