@@ -3,7 +3,7 @@ use std::io::prelude::*;
 
 use flate2::read::GzDecoder;
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
     KSM,
     KO,

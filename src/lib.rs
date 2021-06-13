@@ -1,32 +1,22 @@
 use clap::ArgMatches;
+use kerbalobjects::kofile::KOFile;
+use kerbalobjects::{ksmfile::KSMFile, FromBytes};
+use std::io::Write;
 use std::{error::Error, fs};
-use termcolor::{Color, ColorSpec};
-
-mod argument;
-pub use argument::{Argument, Value};
-
-mod instruction;
-pub use instruction::Instr;
+use termcolor::{Color, StandardStream};
 
 mod fio;
 use fio::{determine_file_type, FileType};
 
-mod ksm_reader;
-pub use ksm_reader::{
-    ArgumentSection, CodeSection, DebugEntry, DebugSection, KSMFile, KSMFileReader, SectionType,
-};
-
 mod coloredout;
 pub use coloredout::Terminal;
 
-mod ko_output;
-pub use ko_output::{KOFileDebug};
-
-use kerbalobjects::{KOFileReader, KOFile};
+mod output;
+pub use output::KOFileDebug;
 
 pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
-pub static VERSION: &'static str = "1.2.8";
+pub static VERSION: &'static str = "1.5.0";
 
 pub static ORANGE_COLOR: Color = Color::Rgb(201, 155, 87);
 pub static PURPLE_COLOR: Color = Color::Rgb(133, 80, 179);
@@ -35,40 +25,32 @@ pub static LIGHT_RED_COLOR: Color = Color::Rgb(255, 147, 147);
 pub static GREEN_COLOR: Color = Color::Rgb(129, 181, 154);
 
 pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
-    // Create the default colorspec as no color
-    let no_color = ColorSpec::new();
+    let mut stream = StandardStream::stdout(termcolor::ColorChoice::Auto);
 
-    // Create a new "Terminal" output object
-    let mut term = Terminal::new(no_color);
-
-    term.writeln(&format!("kDump version {}", VERSION))?;
+    writeln!(stream, "kDump version {}", VERSION)?;
 
     let filename = config.file_path.to_string();
     let raw_contents = fs::read(filename)?;
+    let mut raw_contents_iter = raw_contents.iter().peekable();
 
     let file_type = determine_file_type(&raw_contents)?;
 
     match file_type {
         // If this is a compiled kerbal machine code file
         FileType::KSM => {
-            let mut ksm_reader = KSMFileReader::new(raw_contents)?;
+            // let ksm = KSMFile::from_bytes(&mut raw_contents_iter, false)?;
 
-            let ksm_file = KSMFile::read(&mut ksm_reader)?;
-
-            ksm_file.dump(&config)?;
+            // ksm_file.dump(&config)?;
 
             Ok(())
         }
         // If it is a kerbal object file
         FileType::KO => {
+            let kofile = KOFile::from_bytes(&mut raw_contents_iter, false)?;
 
-            let mut ko_reader = KOFileReader::new(raw_contents)?;
+            let ko_debug = KOFileDebug::new(kofile);
 
-            let ko_file =  KOFile::read(&mut ko_reader)?;
-
-            let mut ko_debug = KOFileDebug::new(ko_file);
-
-            ko_debug.dump(&config)?;
+            ko_debug.dump(&mut stream, &config)?;
 
             Ok(())
         }
@@ -97,7 +79,7 @@ pub struct CLIConfig {
     pub all_headers: bool,
     pub info: bool,
     pub demangle: bool,
-    pub show_no_raw_insn: bool,
+    pub show_no_raw_instr: bool,
     pub show_no_labels: bool,
 }
 
@@ -124,7 +106,7 @@ impl CLIConfig {
             all_headers: matches.is_present("all_headers"),
             info: matches.is_present("info"),
             demangle: matches.is_present("demangle"),
-            show_no_raw_insn: matches.is_present("show_no_raw_insn"),
+            show_no_raw_instr: matches.is_present("show_no_raw_instr"),
             show_no_labels: matches.is_present("show_no_labels"),
         }
     }
