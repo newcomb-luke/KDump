@@ -8,17 +8,13 @@ use termcolor::{Color, StandardStream};
 mod fio;
 use fio::{determine_file_type, FileType};
 
-mod coloredout;
-pub use coloredout::Terminal;
-
 mod output;
-pub use output::KOFileDebug;
-
-use crate::output::KSMFileDebug;
+use output::KOFileDebug;
+use output::KSMFileDebug;
 
 pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
-pub static VERSION: &'static str = "1.5.0";
+pub static VERSION: &'static str = "1.5.1";
 
 pub static ORANGE_COLOR: Color = Color::Rgb(201, 155, 87);
 pub static PURPLE_COLOR: Color = Color::Rgb(133, 80, 179);
