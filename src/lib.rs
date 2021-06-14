@@ -3,7 +3,7 @@ use kerbalobjects::kofile::KOFile;
 use kerbalobjects::{ksmfile::KSMFile, FromBytes};
 use std::io::Write;
 use std::{error::Error, fs};
-use termcolor::{Color, StandardStream};
+use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 
 mod fio;
 use fio::{determine_file_type, FileType};
@@ -14,7 +14,7 @@ use output::KSMFileDebug;
 
 pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
-pub static VERSION: &'static str = "1.5.1";
+pub static VERSION: &'static str = "1.5.4";
 
 pub static ORANGE_COLOR: Color = Color::Rgb(201, 155, 87);
 pub static PURPLE_COLOR: Color = Color::Rgb(133, 80, 179);
@@ -24,6 +24,11 @@ pub static GREEN_COLOR: Color = Color::Rgb(129, 181, 154);
 
 pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
     let mut stream = StandardStream::stdout(termcolor::ColorChoice::Auto);
+
+    let mut no_color = ColorSpec::new();
+    no_color.set_fg(Some(NO_COLOR));
+
+    stream.set_color(&no_color)?;
 
     writeln!(stream, "kDump version {}", VERSION)?;
 
