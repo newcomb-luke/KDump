@@ -14,6 +14,8 @@ pub use coloredout::Terminal;
 mod output;
 pub use output::KOFileDebug;
 
+use crate::output::KSMFileDebug;
+
 pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
 
 pub static VERSION: &'static str = "1.5.0";
@@ -38,9 +40,11 @@ pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
     match file_type {
         // If this is a compiled kerbal machine code file
         FileType::KSM => {
-            // let ksm = KSMFile::from_bytes(&mut raw_contents_iter, false)?;
+            let ksm = KSMFile::from_bytes(&mut raw_contents_iter, false)?;
 
-            // ksm_file.dump(&config)?;
+            let ksm_debug = KSMFileDebug::new(ksm);
+
+            ksm_debug.dump(&mut stream, &config)?;
 
             Ok(())
         }
