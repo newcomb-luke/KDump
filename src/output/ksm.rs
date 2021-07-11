@@ -335,7 +335,7 @@ impl KSMFileDebug {
         stream.set_color(regular_color)?;
         writeln!(stream, "\n{}:", name)?;
 
-        let mut label = String::from("@0000001");
+        let mut label = String::from("@000001");
         let mut index = start_index;
         let mut addr = start_addr + 2;
 

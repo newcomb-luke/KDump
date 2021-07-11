@@ -29,5 +29,6 @@
         - [x] Section headers
     - [x] String tables
     - [x] Symbol tables
+    - [x] Relocation sections
     - [ ] Full contents
         - [ ] Debug section
