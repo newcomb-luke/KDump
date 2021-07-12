@@ -144,7 +144,7 @@ impl KOFileDebug {
                 for reld_entry in reld_section.entries() {
                     writeln!(
                         stream,
-                        "{:<12}{:0<8}      {:<12}{:0<8}",
+                        "{:<12}{:0>8}      {:<12}{:0>8}",
                         reld_entry.section_index(),
                         reld_entry.instr_index(),
                         reld_entry.operand_index(),
@@ -597,52 +597,6 @@ impl KOFileDebug {
 
         (first_reloc, second_reloc)
     }
-
-    // fn write_symbol(
-    //     stream: &mut StandardStream,
-    //     symbol: &KOSymbol,
-    //     symstrtab: &StringTable,
-    //     symdata: &DataSection,
-    //     regular_color: &ColorSpec,
-    //     variable_color: &ColorSpec,
-    //     func_color: &ColorSpec,
-    //     section_color: &ColorSpec,
-    // ) -> DumpResult {
-    //     let sym_name_idx = symbol.name_idx();
-    //     let sym_name = symstrtab
-    //         .get(sym_name_idx)
-    //         .ok_or("Error getting name of symbol, index invalid")?;
-
-    //     match symbol.sym_type() {
-    //         kerbalobjects::kofile::symbols::SymType::Func => {
-    //             stream.set_color(func_color)?;
-    //             write!(stream, "{}", sym_name)?;
-    //         }
-    //         kerbalobjects::kofile::symbols::SymType::Section => {
-    //             stream.set_color(section_color)?;
-    //             write!(stream, "{}", sym_name)?;
-    //         }
-    //         kerbalobjects::kofile::symbols::SymType::File => {
-    //             write!(stream, "{}", sym_name)?;
-    //         }
-    //         kerbalobjects::kofile::symbols::SymType::Object => {
-    //             stream.set_color(variable_color)?;
-    //             write!(stream, "{}", sym_name)?;
-    //         }
-    //         kerbalobjects::kofile::symbols::SymType::NoType => {
-    //             let value = symdata
-    //                 .get(symbol.value_idx())
-    //                 .ok_or("Value referenced by symbol does not exist")?;
-
-    //             super::write_kosvalue(stream, value, regular_color, variable_color)?;
-    //         }
-    //         kerbalobjects::kofile::symbols::SymType::Unknown => {
-    //             write!(stream, "UNKNOWN")?;
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
 
     fn dump_symbols(
         &self,
