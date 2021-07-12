@@ -1,6 +1,6 @@
 [package]
 name = "kdump"
-version = "1.6.1"
+version = "1.6.2"
 authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
 edition = "2018"
 license = "GPL-3.0"
