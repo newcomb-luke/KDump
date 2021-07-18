@@ -78,6 +78,7 @@ fn main() {
                             .arg(Arg::with_name("show_no_labels")
                                 .help("When disassembling, disables showing the label of each instruction in the object file.")
                                 .long("show-no-labels"))
+                            .setting(clap::AppSettings::ArgRequiredElseHelp)
                             .get_matches();
 
     let config = CLIConfig::new(matches);
