@@ -53,9 +53,13 @@ fn main() {
                                 .short("S")
                                 .long("stabs"))
                             .arg(Arg::with_name("syms")
-                                .help("Displays the contents of symbol table in the KO file.")
+                                .help("Displays the contents of every symbol table in the KO file.")
                                 .short("t")
                                 .long("syms"))
+                            .arg(Arg::with_name("reloc")
+                                .help("Displays the contents of every relocation section in the KO file.")
+                                .short("r")
+                                .long("reloc"))
                             .arg(Arg::with_name("all_headers")
                                 .help("Displays all available KO file header information including the symbol table.")
                                 .short("x")
@@ -74,6 +78,7 @@ fn main() {
                             .arg(Arg::with_name("show_no_labels")
                                 .help("When disassembling, disables showing the label of each instruction in the object file.")
                                 .long("show-no-labels"))
+                            .setting(clap::AppSettings::ArgRequiredElseHelp)
                             .get_matches();
 
     let config = CLIConfig::new(matches);

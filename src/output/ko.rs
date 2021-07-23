@@ -1,9 +1,9 @@
 use kerbalobjects::kofile::sections::DataSection;
-use kerbalobjects::kofile::sections::RelSection;
+use kerbalobjects::kofile::sections::FuncSection;
+use kerbalobjects::kofile::sections::SectionIndex;
 use kerbalobjects::kofile::sections::SectionKind;
 use kerbalobjects::kofile::sections::StringTable;
 use kerbalobjects::kofile::sections::SymbolTable;
-use kerbalobjects::kofile::symbols::KOSymbol;
 use kerbalobjects::kofile::KOFile;
 use kerbalobjects::KOSValue;
 use std::error::Error;
@@ -12,6 +12,7 @@ use termcolor::ColorSpec;
 use termcolor::StandardStream;
 use termcolor::WriteColor;
 
+use crate::output::DynResult;
 use crate::CLIConfig;
 use crate::DARK_RED_COLOR;
 use crate::GREEN_COLOR;
@@ -66,8 +67,12 @@ impl KOFileDebug {
             )?;
         }
 
+        if config.reloc || config.full_contents {
+            self.dump_relocs(stream, &no_color, &purple)?;
+        }
+
         if config.disassemble || config.full_contents {
-            self.dump_rel_sections(
+            self.dump_func_sections(
                 stream,
                 &no_color,
                 &purple,
@@ -81,7 +86,7 @@ impl KOFileDebug {
         }
 
         if config.disassemble_symbol {
-            self.dump_rel_by_symbol(
+            self.dump_func_by_symbol(
                 stream,
                 &config.disassemble_symbol_value,
                 &no_color,
@@ -105,47 +110,56 @@ impl KOFileDebug {
         ))?;
 
         let name = self.kofile.get_header_name(header).ok_or(format!(
-            "Failed to find the string table with index {}'s name in KO file",
+            "Failed to find the string table with section {}'s name in KO file",
             sh_index
         ))?;
 
         Ok(name)
     }
 
-    fn get_symstrtab(&self) -> Result<&StringTable, Box<dyn Error>> {
-        for strtab in self.kofile.str_tabs() {
-            let sh_index = strtab.section_index();
-            if self.get_section_name(sh_index)? == ".symstrtab" {
-                return Ok(strtab);
+    fn dump_relocs(
+        &self,
+        stream: &mut StandardStream,
+        regular_color: &ColorSpec,
+        index_color: &ColorSpec,
+    ) -> DumpResult {
+        stream.set_color(regular_color)?;
+
+        writeln!(stream, "\nRelocation data sections:")?;
+
+        if self.kofile.reld_sections().len() != 0 {
+            for reld_section in self.kofile.reld_sections() {
+                let name = self.get_section_name(reld_section.section_index())?;
+
+                writeln!(stream, "Reld section {}:", name)?;
+
+                writeln!(
+                    stream,
+                    "{:<12}{:<14}{:<12}{:<12}",
+                    "Section", "Instruction", "Operand", "Symbol index"
+                )?;
+
+                stream.set_color(index_color)?;
+
+                for reld_entry in reld_section.entries() {
+                    writeln!(
+                        stream,
+                        "{:<12}{:0>8}      {:<12}{:0>8}",
+                        reld_entry.section_index(),
+                        reld_entry.instr_index(),
+                        reld_entry.operand_index(),
+                        reld_entry.symbol_index()
+                    )?;
+                }
             }
+        } else {
+            writeln!(stream, "None.")?;
         }
 
-        Err("Tried to find .symstrtab, none found".into())
+        Ok(())
     }
 
-    fn get_symtab(&self) -> Result<&SymbolTable, Box<dyn Error>> {
-        for symtab in self.kofile.sym_tabs() {
-            let sh_index = symtab.section_index();
-            if self.get_section_name(sh_index)? == ".symtab" {
-                return Ok(symtab);
-            }
-        }
-
-        Err("Tried to find .symtab, none found".into())
-    }
-
-    fn get_symdata(&self) -> Result<&DataSection, Box<dyn Error>> {
-        for data_section in self.kofile.data_sections() {
-            let sh_index = data_section.section_index();
-            if self.get_section_name(sh_index)? == ".data" {
-                return Ok(data_section);
-            }
-        }
-
-        Err("Tried to find .data, none found".into())
-    }
-
-    fn dump_rel_by_symbol(
+    fn dump_func_by_symbol(
         &self,
         stream: &mut StandardStream,
         symbol_text: &String,
@@ -158,67 +172,78 @@ impl KOFileDebug {
         show_labels: bool,
         show_raw_instr: bool,
     ) -> DumpResult {
-        let mut rel_section_found = None;
+        let mut func_section_found = None;
 
-        let symtab = self.get_symtab()?;
-        let symdata = self.get_symdata()?;
-        let symstrtab = self.get_symstrtab()?;
+        let data_section = self
+            .kofile
+            .data_section_by_name(".data")
+            .ok_or(".data section not found")?;
 
-        for rel_section in self.kofile.rel_sections() {
-            let sh_index = rel_section.section_index();
+        let symtab_opt = self.kofile.sym_tab_by_name(".symtab");
+        let symstrtab_opt = self.kofile.str_tab_by_name(".symstrtab");
+
+        for func_section in self.kofile.func_sections() {
+            let sh_index = func_section.section_index();
             let name = self.get_section_name(sh_index)?;
 
             if name == symbol_text {
-                rel_section_found = Some(rel_section);
+                func_section_found = Some(func_section);
                 break;
             }
 
-            // Loop through each symbol in the section
-            for instr in rel_section.instructions() {
+            // Loop through each instruction in the section
+            for (i, instr) in func_section.instructions().enumerate() {
+                let relocs = self.get_relocated(sh_index, i);
+
                 match instr {
                     kerbalobjects::kofile::Instr::ZeroOp(_) => {}
                     kerbalobjects::kofile::Instr::OneOp(_, op1) => {
-                        let sym1 = symtab.get(*op1).ok_or(format!(
-                            "Tried to find symbol with index {}, but found none.",
-                            op1
-                        ))?;
-                        if KOFileDebug::symbol_matches_str(sym1, symbol_text, symstrtab, symdata)? {
-                            rel_section_found = Some(rel_section);
+                        if self.operand_matches_str(
+                            *op1,
+                            relocs.0,
+                            data_section,
+                            symtab_opt,
+                            symstrtab_opt,
+                            symbol_text,
+                        )? {
+                            func_section_found = Some(func_section);
                             break;
                         }
                     }
                     kerbalobjects::kofile::Instr::TwoOp(_, op1, op2) => {
-                        let sym1 = symtab.get(*op1).ok_or(format!(
-                            "Tried to find symbol with index {}, but found none.",
-                            op1
-                        ))?;
-                        let sym2 = symtab.get(*op2).ok_or(format!(
-                            "Tried to find symbol with index {}, but found none.",
-                            op2
-                        ))?;
-                        if KOFileDebug::symbol_matches_str(sym1, symbol_text, symstrtab, symdata)?
-                            || KOFileDebug::symbol_matches_str(
-                                sym2,
-                                symbol_text,
-                                symstrtab,
-                                symdata,
-                            )?
-                        {
-                            rel_section_found = Some(rel_section);
+                        if self.operand_matches_str(
+                            *op1,
+                            relocs.0,
+                            data_section,
+                            symtab_opt,
+                            symstrtab_opt,
+                            symbol_text,
+                        )? {
+                            func_section_found = Some(func_section);
+                            break;
+                        } else if self.operand_matches_str(
+                            *op2,
+                            relocs.1,
+                            data_section,
+                            symtab_opt,
+                            symstrtab_opt,
+                            symbol_text,
+                        )? {
+                            func_section_found = Some(func_section);
                             break;
                         }
                     }
                 }
             }
 
-            if rel_section_found.is_some() {
+            if func_section_found.is_some() {
                 break;
             }
         }
 
-        match rel_section_found {
+        match func_section_found {
             Some(section) => {
-                self.dump_rel_section(
+                self.dump_func_section(
                     stream,
                     regular_color,
                     index_color,
@@ -239,35 +264,51 @@ impl KOFileDebug {
         Ok(())
     }
 
-    fn symbol_matches_str(
-        symbol: &KOSymbol,
-        s: &str,
-        symstrtab: &StringTable,
-        symdata: &DataSection,
-    ) -> Result<bool, Box<dyn Error>> {
-        let sym_name_idx = symbol.name_idx();
-        let sym_name = symstrtab
-            .get(sym_name_idx)
-            .ok_or("Error getting name of symbol, index invalid")?;
+    fn operand_matches_str(
+        &self,
+        op: usize,
+        reloc: (bool, usize),
+        data_section: &DataSection,
+        symtab_opt: Option<&SymbolTable>,
+        symstrtab_opt: Option<&StringTable>,
+        symbol_text: &String,
+    ) -> DynResult<bool> {
+        if reloc.0 {
+            let symtab =
+                symtab_opt.ok_or("Instruction points to symbol, but symbol table not found")?;
+            let symstrtab = symstrtab_opt
+                .ok_or("Instruction points to symbol, but symbol string table not found")?;
 
-        let sym_str = match symbol.sym_type() {
-            kerbalobjects::kofile::symbols::SymType::NoType => {
-                let value = symdata
-                    .get(symbol.value_idx())
-                    .ok_or("Value referenced by symbol does not exist")?;
+            let sym = symtab
+                .get(reloc.1)
+                .ok_or(format!("Reld entry symbol index invalid: {}", reloc.1))?;
 
-                match value {
-                    KOSValue::StringValue(v) | KOSValue::String(v) => v,
-                    _ => "",
-                }
+            let sym_name = symstrtab
+                .get(sym.name_idx())
+                .ok_or(format!("Symbol name index invalid: {}", sym.name_idx()))?;
+
+            if sym_name == symbol_text {
+                return Ok(true);
             }
-            _ => "",
-        };
+        } else {
+            let value = data_section
+                .get(op)
+                .ok_or(format!("Instruction data index invalid: {}", op))?;
 
-        Ok(sym_name.contains(s) || sym_str.contains(s))
+            match value {
+                KOSValue::String(s) | KOSValue::StringValue(s) => {
+                    if s == symbol_text {
+                        return Ok(true);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(false)
     }
 
-    fn dump_rel_sections(
+    fn dump_func_sections(
         &self,
         stream: &mut StandardStream,
         regular_color: &ColorSpec,
@@ -279,8 +320,12 @@ impl KOFileDebug {
         show_labels: bool,
         show_raw_instr: bool,
     ) -> DumpResult {
-        for rel_section in self.kofile.rel_sections() {
-            self.dump_rel_section(
+        stream.set_color(regular_color)?;
+
+        writeln!(stream, "\nFunction sections: ")?;
+
+        for func_section in self.kofile.func_sections() {
+            self.dump_func_section(
                 stream,
                 regular_color,
                 index_color,
@@ -290,14 +335,14 @@ impl KOFileDebug {
                 section_color,
                 show_labels,
                 show_raw_instr,
-                rel_section,
+                func_section,
             )?;
         }
 
         Ok(())
     }
 
-    fn dump_rel_section(
+    fn dump_func_section(
         &self,
         stream: &mut StandardStream,
         regular_color: &ColorSpec,
@@ -308,21 +353,25 @@ impl KOFileDebug {
         section_color: &ColorSpec,
         show_labels: bool,
         show_raw_instr: bool,
-        rel_section: &RelSection,
+        func_section: &FuncSection,
     ) -> DumpResult {
         stream.set_color(regular_color)?;
 
-        let sh_index = rel_section.section_index();
+        let sh_index = func_section.section_index();
 
         let name = self.get_section_name(sh_index)?;
 
-        let symdata = self.get_symdata()?;
+        let data_section = self
+            .kofile
+            .data_section_by_name(".data")
+            .ok_or("Could not find KO file .data section")?;
 
-        let symstrtab = self.get_symstrtab()?;
+        let symtab_opt = self.kofile.sym_tab_by_name(".symtab");
+        let symstrtab_opt = self.kofile.str_tab_by_name(".symstrtab");
 
-        writeln!(stream, "\nRelocatable section {}:", name)?;
+        writeln!(stream, "{}:", name)?;
 
-        for (i, instr) in rel_section.instructions().enumerate() {
+        for (i, instr) in func_section.instructions().enumerate() {
             write!(stream, "  ")?;
 
             let instr_opcode;
@@ -356,11 +405,7 @@ impl KOFileDebug {
                     }
                 }
             } else {
-                instr_opcode = match instr {
-                    kerbalobjects::kofile::Instr::ZeroOp(opcode) => *opcode,
-                    kerbalobjects::kofile::Instr::OneOp(opcode, _) => *opcode,
-                    kerbalobjects::kofile::Instr::TwoOp(opcode, _, _) => *opcode,
-                }
+                instr_opcode = instr.opcode();
             }
 
             instr_mnemonic = instr_opcode.into();
@@ -369,49 +414,145 @@ impl KOFileDebug {
             write!(stream, " {:<5}", instr_mnemonic)?;
             stream.set_color(regular_color)?;
 
+            let relocs = self.get_relocated(sh_index, i);
+
             match instr {
                 kerbalobjects::kofile::Instr::ZeroOp(_) => {}
                 kerbalobjects::kofile::Instr::OneOp(_, op1) => {
-                    let sym1 = self.symbol_from_operand(*op1)?;
+                    // If this operand has a relocation entry
+                    if relocs.0 .0 {
+                        let symtab = symtab_opt
+                            .ok_or("Instruction requires symbol, but symbol table not found")?;
+                        let symstrtab = symstrtab_opt.ok_or(
+                            "Instruction requires symbol, but symbol string table not found",
+                        )?;
 
-                    KOFileDebug::write_symbol(
-                        stream,
-                        sym1,
-                        symstrtab,
-                        symdata,
-                        regular_color,
-                        variable_color,
-                        func_color,
-                        section_color,
-                    )?;
+                        let sym1 = symtab
+                            .get(relocs.0 .1)
+                            .ok_or(format!("Reld entry symbol index invalid: {}", relocs.0 .1))?;
+
+                        let sym1_name = symstrtab.get(sym1.name_idx()).ok_or(format!(
+                            "Symbol has invalid name index: {}",
+                            sym1.name_idx()
+                        ))?;
+
+                        match sym1.sym_type() {
+                            kerbalobjects::kofile::symbols::SymType::Func => {
+                                stream.set_color(func_color)?;
+                                write!(stream, "<{}>", sym1_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            kerbalobjects::kofile::symbols::SymType::Section => {
+                                stream.set_color(section_color)?;
+                                write!(stream, "<{}>", sym1_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            kerbalobjects::kofile::symbols::SymType::NoType => {
+                                stream.set_color(variable_color)?;
+                                write!(stream, "<{}>", sym1_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        // This instruction has a regular value
+                        let value = data_section
+                            .get(*op1)
+                            .ok_or(format!("Instruction data index invalid: {}", op1))?;
+
+                        super::write_kosvalue(stream, value, regular_color, variable_color)?;
+                    }
                 }
                 kerbalobjects::kofile::Instr::TwoOp(_, op1, op2) => {
-                    let sym1 = self.symbol_from_operand(*op1)?;
-                    let sym2 = self.symbol_from_operand(*op2)?;
+                    // If this operand has a relocation entry
+                    if relocs.0 .0 {
+                        let symtab = symtab_opt
+                            .ok_or("Instruction requires symbol, but symbol table not found")?;
+                        let symstrtab = symstrtab_opt.ok_or(
+                            "Instruction requires symbol, but symbol string table not found",
+                        )?;
 
-                    KOFileDebug::write_symbol(
-                        stream,
-                        sym1,
-                        symstrtab,
-                        symdata,
-                        regular_color,
-                        variable_color,
-                        func_color,
-                        section_color,
-                    )?;
+                        let sym1 = symtab
+                            .get(relocs.0 .1)
+                            .ok_or(format!("Reld entry symbol index invalid: {}", relocs.0 .1))?;
 
-                    write!(stream, ",")?;
+                        let sym1_name = symstrtab.get(sym1.name_idx()).ok_or(format!(
+                            "Symbol has invalid name index: {}",
+                            sym1.name_idx()
+                        ))?;
 
-                    KOFileDebug::write_symbol(
-                        stream,
-                        sym2,
-                        symstrtab,
-                        symdata,
-                        regular_color,
-                        variable_color,
-                        func_color,
-                        section_color,
-                    )?;
+                        match sym1.sym_type() {
+                            kerbalobjects::kofile::symbols::SymType::Func => {
+                                stream.set_color(func_color)?;
+                                write!(stream, "<{}>", sym1_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            kerbalobjects::kofile::symbols::SymType::Section => {
+                                stream.set_color(section_color)?;
+                                write!(stream, "<{}>", sym1_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            kerbalobjects::kofile::symbols::SymType::NoType => {
+                                stream.set_color(variable_color)?;
+                                write!(stream, "<{}>", sym1_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        // This instruction has a regular value
+                        let value = data_section
+                            .get(*op1)
+                            .ok_or(format!("Instruction data index invalid: {}", op1))?;
+
+                        super::write_kosvalue(stream, value, regular_color, variable_color)?;
+                    }
+
+                    write!(stream, ", ")?;
+
+                    // If this operand has a relocation entry
+                    if relocs.1 .0 {
+                        let symtab = symtab_opt
+                            .ok_or("Instruction requires symbol, but symbol table not found")?;
+                        let symstrtab = symstrtab_opt.ok_or(
+                            "Instruction requires symbol, but symbol string table not found",
+                        )?;
+
+                        let sym2 = symtab
+                            .get(relocs.1 .1)
+                            .ok_or(format!("Reld entry symbol index invalid: {}", relocs.1 .1))?;
+
+                        let sym2_name = symstrtab.get(sym2.name_idx()).ok_or(format!(
+                            "Symbol has invalid name index: {}",
+                            sym2.name_idx()
+                        ))?;
+
+                        match sym2.sym_type() {
+                            kerbalobjects::kofile::symbols::SymType::Func => {
+                                stream.set_color(func_color)?;
+                                write!(stream, "<{}>", sym2_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            kerbalobjects::kofile::symbols::SymType::Section => {
+                                stream.set_color(section_color)?;
+                                write!(stream, "<{}>", sym2_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            kerbalobjects::kofile::symbols::SymType::NoType => {
+                                stream.set_color(variable_color)?;
+                                write!(stream, "<{}>", sym2_name)?;
+                                stream.set_color(regular_color)?;
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        // This instruction has a regular value
+                        let value = data_section
+                            .get(*op2)
+                            .ok_or(format!("Instruction data index invalid: {}", op1))?;
+
+                        super::write_kosvalue(stream, value, regular_color, variable_color)?;
+                    }
                 }
             }
 
@@ -421,56 +562,40 @@ impl KOFileDebug {
         Ok(())
     }
 
-    fn symbol_from_operand(&self, op: usize) -> Result<&KOSymbol, Box<dyn Error>> {
-        self.get_symtab()?
-            .get(op)
-            .ok_or(format!("Tried to find symbol with index {}, but found none.", op).into())
-    }
+    fn get_relocated(
+        &self,
+        section_index: usize,
+        instr_index: usize,
+    ) -> ((bool, usize), (bool, usize)) {
+        let mut first_reloc = (false, 0);
+        let mut second_reloc = (false, 0);
 
-    fn write_symbol(
-        stream: &mut StandardStream,
-        symbol: &KOSymbol,
-        symstrtab: &StringTable,
-        symdata: &DataSection,
-        regular_color: &ColorSpec,
-        variable_color: &ColorSpec,
-        func_color: &ColorSpec,
-        section_color: &ColorSpec,
-    ) -> DumpResult {
-        let sym_name_idx = symbol.name_idx();
-        let sym_name = symstrtab
-            .get(sym_name_idx)
-            .ok_or("Error getting name of symbol, index invalid")?;
+        let reld_section = match self.kofile.reld_section_by_name(".reld") {
+            Some(section) => section,
+            None => {
+                return ((false, 0), (false, 0));
+            }
+        };
 
-        match symbol.sym_type() {
-            kerbalobjects::kofile::symbols::SymType::Func => {
-                stream.set_color(func_color)?;
-                write!(stream, "{}", sym_name)?;
-            }
-            kerbalobjects::kofile::symbols::SymType::Section => {
-                stream.set_color(section_color)?;
-                write!(stream, "{}", sym_name)?;
-            }
-            kerbalobjects::kofile::symbols::SymType::File => {
-                write!(stream, "{}", sym_name)?;
-            }
-            kerbalobjects::kofile::symbols::SymType::Object => {
-                stream.set_color(variable_color)?;
-                write!(stream, "{}", sym_name)?;
-            }
-            kerbalobjects::kofile::symbols::SymType::NoType => {
-                let value = symdata
-                    .get(symbol.value_idx())
-                    .ok_or("Value referenced by symbol does not exist")?;
-
-                super::write_kosvalue(stream, value, regular_color, variable_color)?;
-            }
-            kerbalobjects::kofile::symbols::SymType::Unknown => {
-                write!(stream, "UNKNOWN")?;
+        for reld_entry in reld_section.entries() {
+            if reld_entry.section_index() == section_index
+                && reld_entry.instr_index() == instr_index
+            {
+                match reld_entry.operand_index() {
+                    0 => {
+                        first_reloc = (true, reld_entry.symbol_index());
+                    }
+                    1 => {
+                        second_reloc = (true, reld_entry.symbol_index());
+                    }
+                    _ => {
+                        break;
+                    }
+                }
             }
         }
 
-        Ok(())
+        (first_reloc, second_reloc)
     }
 
     fn dump_symbols(
@@ -487,64 +612,71 @@ impl KOFileDebug {
         stream.set_color(regular_color)?;
         writeln!(stream, "\nSymbol Tables:")?;
 
-        let symstrtab = self.get_symstrtab()?;
+        let symstrtab_opt = self.kofile.str_tab_by_name(".symstrtab");
 
-        for symbol_table in self.kofile.sym_tabs() {
-            let sh_index = symbol_table.section_index();
+        match symstrtab_opt {
+            Some(symstrtab) => {
+                for symbol_table in self.kofile.sym_tabs() {
+                    let sh_index = symbol_table.section_index();
 
-            let name = self.get_section_name(sh_index)?;
+                    let name = self.get_section_name(sh_index)?;
 
-            writeln!(stream, "Table {}", name)?;
+                    writeln!(stream, "Table {}", name)?;
 
-            writeln!(
-                stream,
-                "{:<16}{:<10}{:<8}{:<10}{:<10}{}",
-                "Name", "Value", "Size", "Binding", "Type", "Section"
-            )?;
+                    writeln!(
+                        stream,
+                        "{:<16}{:<10}{:<8}{:<10}{:<10}{}",
+                        "Name", "Value", "Size", "Binding", "Type", "Section"
+                    )?;
 
-            for symbol in symbol_table.symbols() {
-                let symbol_name = symstrtab.get(symbol.name_idx());
+                    for symbol in symbol_table.symbols() {
+                        let symbol_name = symstrtab.get(symbol.name_idx());
 
-                match symbol_name {
-                    Some(symbol_name) => {
-                        stream.set_color(name_color)?;
-                        write!(stream, "{:<16.16}", symbol_name)?;
-                    }
-                    None => {
-                        write!(stream, "{:<16}", "")?;
+                        match symbol_name {
+                            Some(symbol_name) => {
+                                stream.set_color(name_color)?;
+                                write!(stream, "{:<16.16}", symbol_name)?;
+                            }
+                            None => {
+                                write!(stream, "{:<16}", "")?;
+                            }
+                        }
+
+                        stream.set_color(value_color)?;
+                        write!(stream, "{:0>8x}  ", symbol.value_idx())?;
+
+                        stream.set_color(size_color)?;
+                        write!(stream, "{:0>4x}    ", symbol.size())?;
+
+                        let bind_str = match symbol.sym_bind() {
+                            kerbalobjects::kofile::symbols::SymBind::Local => "LOCAL",
+                            kerbalobjects::kofile::symbols::SymBind::Global => "GLOBAL",
+                            kerbalobjects::kofile::symbols::SymBind::Extern => "EXTERN",
+                            kerbalobjects::kofile::symbols::SymBind::Unknown => "UNKNOWN",
+                        };
+
+                        stream.set_color(bind_color)?;
+                        write!(stream, "{:<10}", bind_str)?;
+
+                        let kind_str = match symbol.sym_type() {
+                            kerbalobjects::kofile::symbols::SymType::Func => "FUNC",
+                            kerbalobjects::kofile::symbols::SymType::File => "FILE",
+                            kerbalobjects::kofile::symbols::SymType::NoType => "NOTYPE",
+                            kerbalobjects::kofile::symbols::SymType::Object => "OBJECT",
+                            kerbalobjects::kofile::symbols::SymType::Section => "SECTION",
+                            kerbalobjects::kofile::symbols::SymType::Unknown => "UNKNOWN",
+                        };
+
+                        stream.set_color(type_color)?;
+                        write!(stream, "{:<10}", kind_str)?;
+
+                        stream.set_color(index_color)?;
+                        writeln!(stream, "{}", symbol.sh_idx())?;
                     }
                 }
-
-                stream.set_color(value_color)?;
-                write!(stream, "{:0>8x}  ", symbol.value_idx())?;
-
-                stream.set_color(size_color)?;
-                write!(stream, "{:0>4x}    ", symbol.size())?;
-
-                let bind_str = match symbol.sym_bind() {
-                    kerbalobjects::kofile::symbols::SymBind::Local => "LOCAL",
-                    kerbalobjects::kofile::symbols::SymBind::Global => "GLOBAL",
-                    kerbalobjects::kofile::symbols::SymBind::Extern => "EXTERN",
-                    kerbalobjects::kofile::symbols::SymBind::Unknown => "UNKNOWN",
-                };
-
-                stream.set_color(bind_color)?;
-                write!(stream, "{:<10}", bind_str)?;
-
-                let kind_str = match symbol.sym_type() {
-                    kerbalobjects::kofile::symbols::SymType::Func => "FUNC",
-                    kerbalobjects::kofile::symbols::SymType::File => "FILE",
-                    kerbalobjects::kofile::symbols::SymType::NoType => "NOTYPE",
-                    kerbalobjects::kofile::symbols::SymType::Object => "OBJECT",
-                    kerbalobjects::kofile::symbols::SymType::Section => "SECTION",
-                    kerbalobjects::kofile::symbols::SymType::Unknown => "UNKNOWN",
-                };
-
-                stream.set_color(type_color)?;
-                write!(stream, "{:<10}", kind_str)?;
-
-                stream.set_color(index_color)?;
-                writeln!(stream, "{}", symbol.sh_idx())?;
+            }
+            None => {
+                writeln!(stream, "None.")?;
             }
         }
 
@@ -690,7 +822,8 @@ impl KOFileDebug {
     fn kind_as_str(kind: SectionKind) -> &'static str {
         match kind {
             SectionKind::Null => "NULL",
-            SectionKind::Rel => "REL",
+            SectionKind::Reld => "RELD",
+            SectionKind::Func => "FUNC",
             SectionKind::Data => "DATA",
             SectionKind::SymTab => "SYMTAB",
             SectionKind::StrTab => "STRTAB",
@@ -744,7 +877,7 @@ impl KOFileDebug {
 
             let mut index = 1;
 
-            for s in strtab.strings() {
+            for s in strtab.strings().skip(1) {
                 write!(stream, "  [")?;
 
                 stream.set_color(index_color)?;
@@ -773,7 +906,11 @@ impl KOFileDebug {
 
         writeln!(stream, "\tVersion: {}", self.kofile.version())?;
 
-        writeln!(stream, "\tShstrtab Index: {}", self.kofile.strtab_index())?;
+        writeln!(
+            stream,
+            "\tShstrtab Index: {}",
+            self.kofile.sh_strtab_index()
+        )?;
 
         writeln!(
             stream,

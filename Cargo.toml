@@ -1,6 +1,6 @@
 [package]
 name = "kdump"
-version = "1.5.4"
+version = "1.6.3"
 authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -13,5 +13,5 @@ readme = "README.md"
 [dependencies]
 clap = "~2.27.0"
 termcolor = "1.1"
-kerbalobjects = "3.0.7"
+kerbalobjects = "3.1.2"
 flate2 = "1.0"
