@@ -1,5 +1,11 @@
 # KDump
 
+[![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/newcomb-luke/KDump)](https://deps.rs/repo/github/newcomb-luke/KDump)
+![GitHub](https://img.shields.io/github/license/newcomb-luke/KDump)
+
+![Crates.io](https://img.shields.io/crates/v/kdump?color=%235555cc)
+![Crates.io](https://img.shields.io/crates/d/kdump)
+
 KDump is a program that allows anyone with a command line to view the contents of KerboScript Machine Code (KSM) files, and KerbalObject (KO) files to view compiled code for Kerbal Operating System. KO and KSM files are fully supported.
 
 KDump is the kOS equivalent to ELF's **objdump** or **readelf** programs.
