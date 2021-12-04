@@ -78,7 +78,7 @@ impl KSMFileDebug {
     }
 
     fn get_info(&self) -> String {
-        match self.ksmfile.arg_section().get(0) {
+        match self.ksmfile.arg_section().arguments().nth(0) {
             Some(value) => {
                 match value {
                     KOSValue::String(s) => {
@@ -89,7 +89,7 @@ impl KSMFileDebug {
                             format!("{}", s)
                         }
                     }
-                    _ => String::from("Unknown compiler"),
+                    _ => String::from("Unknown compiler 2"),
                 }
             }
             None => String::from("Unknown compiler"),
