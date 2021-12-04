@@ -168,11 +168,14 @@ impl KSMFileDebug {
                 found_section = Some(code_section);
                 break;
             } else {
-                for instr in code_section.instructions() {
+                for (in_func_index, instr) in code_section.instructions().enumerate() {
                     let matches = match instr {
                         Instr::ZeroOp(_) => false,
                         Instr::OneOp(_, op1) => {
-                            let val1 = self.value_from_operand(*op1)?;
+                            let val1 = self.value_from_operand(*op1).ok_or(format!(
+                                "Instruction number {} references invalid argument index: {:x}",
+                                in_func_index, op1
+                            ))?;
 
                             match val1 {
                                 KOSValue::String(s) | KOSValue::StringValue(s) => s == symbol,
@@ -180,8 +183,14 @@ impl KSMFileDebug {
                             }
                         }
                         Instr::TwoOp(_, op1, op2) => {
-                            let val1 = self.value_from_operand(*op1)?;
-                            let val2 = self.value_from_operand(*op2)?;
+                            let val1 = self.value_from_operand(*op1).ok_or(format!(
+                                "Instruction number {} references invalid argument index: {:x}",
+                                in_func_index, op1
+                            ))?;
+                            let val2 = self.value_from_operand(*op2).ok_or(format!(
+                                "Instruction number {} references invalid argument index: {:x}",
+                                in_func_index, op2
+                            ))?;
 
                             let match1 = match val1 {
                                 KOSValue::String(s) | KOSValue::StringValue(s) => s == symbol,
@@ -307,7 +316,10 @@ impl KSMFileDebug {
                     Some(instr) => match instr {
                         kerbalobjects::ksmfile::Instr::OneOp(opcode, op1) => {
                             if *opcode == Opcode::Lbrt {
-                                let operand = self.value_from_operand(*op1)?;
+                                let operand = self.value_from_operand(*op1).ok_or(format!(
+                                    "Instruction number {} references invalid argument index: {:x}",
+                                    0, op1
+                                ))?;
 
                                 match operand {
                                     KOSValue::String(s) | KOSValue::StringValue(s) => {
@@ -342,7 +354,7 @@ impl KSMFileDebug {
         let max_line_number = self.max_debug_line_number();
         let max_width = max_line_number.to_string().len();
 
-        for instr in code_section.instructions() {
+        for (in_func_index, instr) in code_section.instructions().enumerate() {
             let instr_size = self.instr_size(instr);
 
             if show_line_numbers {
@@ -407,7 +419,6 @@ impl KSMFileDebug {
                         stream.set_color(regular_color)?;
                     }
                     None => {
-                        println!("Just sad");
                         write!(stream, "   {:>width$}     ", "", width = max_width)?;
                     }
                 }
@@ -438,7 +449,10 @@ impl KSMFileDebug {
             if is_lbrt {
                 match instr {
                     kerbalobjects::ksmfile::Instr::OneOp(_, op) => {
-                        let arg = self.value_from_operand(*op)?;
+                        let arg = self.value_from_operand(*op).ok_or(format!(
+                            "Instruction number {} references invalid argument index: {:x}",
+                            in_func_index, op
+                        ))?;
 
                         match arg {
                             KOSValue::String(s) => {
@@ -511,13 +525,22 @@ impl KSMFileDebug {
             match instr {
                 kerbalobjects::ksmfile::Instr::ZeroOp(_) => {}
                 kerbalobjects::ksmfile::Instr::OneOp(_, op1) => {
-                    let val1 = self.value_from_operand(*op1)?;
+                    let val1 = self.value_from_operand(*op1).ok_or(format!(
+                        "Instruction number {} references invalid argument index: {:x}",
+                        in_func_index, op1
+                    ))?;
 
                     super::write_kosvalue(stream, val1, regular_color, variable_color)?;
                 }
                 kerbalobjects::ksmfile::Instr::TwoOp(_, op1, op2) => {
-                    let val1 = self.value_from_operand(*op1)?;
-                    let val2 = self.value_from_operand(*op2)?;
+                    let val1 = self.value_from_operand(*op1).ok_or(format!(
+                        "Instruction number {} references invalid argument index: {:x}",
+                        in_func_index, op1
+                    ))?;
+                    let val2 = self.value_from_operand(*op2).ok_or(format!(
+                        "Instruction number {} references invalid argument index: {:x}",
+                        in_func_index, op2
+                    ))?;
 
                     super::write_kosvalue(stream, val1, regular_color, variable_color)?;
 
@@ -569,11 +592,8 @@ impl KSMFileDebug {
         None
     }
 
-    fn value_from_operand(&self, op: usize) -> DynResult<&KOSValue> {
-        self.ksmfile
-            .arg_section()
-            .get(op)
-            .ok_or("Instruction referenced invalid argument index".into())
+    fn value_from_operand(&self, op: usize) -> Option<&KOSValue> {
+        self.ksmfile.arg_section().get(op)
     }
 
     fn dump_argument_section(
