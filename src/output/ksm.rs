@@ -636,7 +636,8 @@ impl KSMFileDebug {
             stream.set_color(type_color)?;
             match value {
                 kerbalobjects::KOSValue::Null => {
-                    writeln!(stream, "NULL")?;
+                    write!(stream, "NULL")?;
+                    stream.set_color(regular_color)?;
                 }
                 kerbalobjects::KOSValue::Bool(b) => {
                     write!(stream, "{:<12}", "BOOL")?;
@@ -683,6 +684,7 @@ impl KSMFileDebug {
                 }
                 kerbalobjects::KOSValue::ArgMarker => {
                     write!(stream, "{:<12}", "ARGMARKER")?;
+                    stream.set_color(regular_color)?;
                 }
                 kerbalobjects::KOSValue::ScalarInt(i) => {
                     write!(stream, "{:<12}", "SCALARINT")?;
