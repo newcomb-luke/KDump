@@ -5,11 +5,11 @@ use crate::LIGHT_RED_COLOR;
 // use crate::NO_COLOR;
 use crate::ORANGE_COLOR;
 use crate::PURPLE_COLOR;
-use kerbalobjects::ksmfile::sections::CodeSection;
-use kerbalobjects::ksmfile::sections::DebugEntry;
-use kerbalobjects::ksmfile::sections::DebugRange;
-use kerbalobjects::ksmfile::Instr;
-use kerbalobjects::ksmfile::KSMFile;
+use kerbalobjects::ksm::sections::DebugEntry;
+use kerbalobjects::ksm::sections::DebugRange;
+use kerbalobjects::ksm::sections::{ArgIndex, CodeSection};
+use kerbalobjects::ksm::Instr;
+use kerbalobjects::ksm::KSMFile;
 use kerbalobjects::KOSValue;
 use kerbalobjects::Opcode;
 use std::io::Write;
@@ -57,11 +57,11 @@ impl KSMFileDebug {
             )?;
         }
 
-        if config.disassemble_symbol {
+        if let Some(disassemble_symbol) = &config.disassemble_symbol {
             self.dump_code_by_symbol(
                 stream,
                 config,
-                &config.disassemble_symbol_value,
+                disassemble_symbol,
                 &no_color,
                 &orange,
                 &purple,
@@ -78,15 +78,15 @@ impl KSMFileDebug {
     }
 
     fn get_info(&self) -> String {
-        match self.ksmfile.arg_section().arguments().nth(0) {
+        match self.ksmfile.arg_section.arguments().next() {
             Some(value) => {
                 match value {
                     KOSValue::String(s) => {
                         // If it is either a label that is used for reset or a KS formatted function name
-                        if s.starts_with("@") || s.contains("`") {
+                        if s.starts_with('@') || s.contains('`') {
                             String::from("Compiled using official kOS compiler.")
                         } else {
-                            format!("{}", s)
+                            s.to_string()
                         }
                     }
                     _ => String::from("Unknown compiler 2"),
@@ -104,11 +104,11 @@ impl KSMFileDebug {
         let max_line_number = self.max_debug_line_number();
         let max_width = max_line_number.to_string().len();
 
-        for debug_entry in self.ksmfile.debug_section().debug_entries() {
+        for debug_entry in self.ksmfile.debug_section.debug_entries() {
             write!(
                 stream,
                 "  Line {:>width$}, ",
-                debug_entry.line_number(),
+                debug_entry.line_number,
                 width = max_width
             )?;
 
@@ -124,19 +124,20 @@ impl KSMFileDebug {
             }
 
             for (index, range) in debug_entry.ranges().enumerate() {
-                write!(stream, "[{:0>6x}, {:0>6x}]", range.start(), range.end())?;
+                write!(stream, "[{:0>6x}, {:0>6x}]", range.start, range.end)?;
 
                 if index < num_ranges - 1 {
                     write!(stream, ",")?;
                 }
             }
 
-            writeln!(stream, "")?;
+            writeln!(stream)?;
         }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn dump_code_by_symbol(
         &self,
         stream: &mut StandardStream,
@@ -153,15 +154,12 @@ impl KSMFileDebug {
         let mut found_section = None;
 
         for code_section in self.ksmfile.code_sections() {
-            let matches = match code_section.section_type() {
-                kerbalobjects::ksmfile::sections::CodeType::Main => {
-                    symbol.eq_ignore_ascii_case("main")
-                }
-                kerbalobjects::ksmfile::sections::CodeType::Initialization => {
+            let matches = match code_section.section_type {
+                kerbalobjects::ksm::sections::CodeType::Main => symbol.eq_ignore_ascii_case("main"),
+                kerbalobjects::ksm::sections::CodeType::Initialization => {
                     symbol.eq_ignore_ascii_case("init")
                 }
-                kerbalobjects::ksmfile::sections::CodeType::Function => false,
-                kerbalobjects::ksmfile::sections::CodeType::Unknown => false,
+                kerbalobjects::ksm::sections::CodeType::Function => false,
             };
 
             if matches {
@@ -174,7 +172,8 @@ impl KSMFileDebug {
                         Instr::OneOp(_, op1) => {
                             let val1 = self.value_from_operand(*op1).ok_or(format!(
                                 "Instruction number {} references invalid argument index: {:x}",
-                                in_func_index, op1
+                                in_func_index,
+                                usize::from(*op1)
                             ))?;
 
                             match val1 {
@@ -185,11 +184,13 @@ impl KSMFileDebug {
                         Instr::TwoOp(_, op1, op2) => {
                             let val1 = self.value_from_operand(*op1).ok_or(format!(
                                 "Instruction number {} references invalid argument index: {:x}",
-                                in_func_index, op1
+                                in_func_index,
+                                usize::from(*op1)
                             ))?;
                             let val2 = self.value_from_operand(*op2).ok_or(format!(
                                 "Instruction number {} references invalid argument index: {:x}",
-                                in_func_index, op2
+                                in_func_index,
+                                usize::from(*op2)
                             ))?;
 
                             let match1 = match val1 {
@@ -245,6 +246,7 @@ impl KSMFileDebug {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn dump_code_sections(
         &self,
         stream: &mut StandardStream,
@@ -290,6 +292,7 @@ impl KSMFileDebug {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn dump_code_section(
         &self,
         stream: &mut StandardStream,
@@ -305,43 +308,40 @@ impl KSMFileDebug {
         show_labels: bool,
         show_raw_instr: bool,
     ) -> DynResult<(i32, usize)> {
-        let section_type = code_section.section_type();
-        let addr_width = self.ksmfile.arg_section().num_index_bytes();
+        let section_type = code_section.section_type;
+        let addr_width = self.ksmfile.arg_section.num_index_bytes() as u8 as usize;
 
         let name = match section_type {
-            kerbalobjects::ksmfile::sections::CodeType::Main => "MAIN",
-            kerbalobjects::ksmfile::sections::CodeType::Initialization => "INIT",
-            kerbalobjects::ksmfile::sections::CodeType::Function => {
+            kerbalobjects::ksm::sections::CodeType::Main => "MAIN",
+            kerbalobjects::ksm::sections::CodeType::Initialization => "INIT",
+            kerbalobjects::ksm::sections::CodeType::Function => {
                 match code_section.instructions().next() {
-                    Some(instr) => match instr {
-                        kerbalobjects::ksmfile::Instr::OneOp(opcode, op1) => {
-                            if *opcode == Opcode::Lbrt {
-                                let operand = self.value_from_operand(*op1).ok_or(format!(
-                                    "Instruction number {} references invalid argument index: {:x}",
-                                    0, op1
-                                ))?;
+                    Some(&Instr::OneOp(opcode, op1)) => {
+                        if opcode == Opcode::Lbrt {
+                            let operand = self.value_from_operand(op1).ok_or(format!(
+                                "Instruction number {} references invalid argument index: {:x}",
+                                0,
+                                usize::from(op1)
+                            ))?;
 
-                                match operand {
-                                    KOSValue::String(s) | KOSValue::StringValue(s) => {
-                                        // If this is a kOS-compiled function
-                                        if s.contains("`") {
-                                            s.split("`").next().unwrap()
-                                        } else {
-                                            s
-                                        }
+                            match operand {
+                                KOSValue::String(s) | KOSValue::StringValue(s) => {
+                                    // If this is a kOS-compiled function
+                                    if s.contains('`') {
+                                        s.split('`').next().unwrap()
+                                    } else {
+                                        s
                                     }
-                                    _ => "FUNC",
                                 }
-                            } else {
-                                "FUNC"
+                                _ => "FUNC",
                             }
+                        } else {
+                            "FUNC"
                         }
-                        _ => "FUNC",
-                    },
-                    None => "FUNC",
+                    }
+                    _ => "FUNC",
                 }
             }
-            kerbalobjects::ksmfile::sections::CodeType::Unknown => "UNKNOWN",
         };
 
         stream.set_color(regular_color)?;
@@ -362,9 +362,9 @@ impl KSMFileDebug {
 
                 match debug_entry {
                     Some((entry, range)) => {
-                        let line_num = entry.line_number();
-                        let range_start = range.start();
-                        let range_end = range.end();
+                        let line_num = entry.line_number;
+                        let range_start = range.start;
+                        let range_end = range.end;
                         let range_middle = ((range_end - range_start) / 2) + range_start;
                         let operand_length = instr_size - 1;
 
@@ -427,9 +427,9 @@ impl KSMFileDebug {
             }
 
             let instr_opcode = match instr {
-                kerbalobjects::ksmfile::Instr::ZeroOp(opcode) => *opcode,
-                kerbalobjects::ksmfile::Instr::OneOp(opcode, _) => *opcode,
-                kerbalobjects::ksmfile::Instr::TwoOp(opcode, _, _) => *opcode,
+                Instr::ZeroOp(opcode) => *opcode,
+                Instr::OneOp(opcode, _) => *opcode,
+                Instr::TwoOp(opcode, _, _) => *opcode,
             };
 
             let is_lbrt = instr_opcode == Opcode::Lbrt;
@@ -447,28 +447,23 @@ impl KSMFileDebug {
             stream.set_color(regular_color)?;
 
             if is_lbrt {
-                match instr {
-                    kerbalobjects::ksmfile::Instr::OneOp(_, op) => {
-                        let arg = self.value_from_operand(*op).ok_or(format!(
-                            "Instruction number {} references invalid argument index: {:x}",
-                            in_func_index, op
-                        ))?;
+                if let &Instr::OneOp(_, op) = instr {
+                    let arg = self.value_from_operand(op).ok_or(format!(
+                        "Instruction number {} references invalid argument index: {:x}",
+                        in_func_index,
+                        usize::from(op)
+                    ))?;
 
-                        match arg {
-                            KOSValue::String(s) => {
-                                label = s.clone();
+                    if let KOSValue::String(s) = arg {
+                        label = s.clone();
 
-                                if label.starts_with("@") {
-                                    // Makes @0013 @000013
-                                    label.insert_str(1, "00");
-                                }
-                            }
-                            _ => {}
+                        if label.starts_with('@') {
+                            // Makes @0013 @000013
+                            label.insert_str(1, "00");
                         }
-
-                        label.truncate(7);
                     }
-                    _ => {}
+
+                    label.truncate(7);
                 }
             }
             // If it isn't a label reset
@@ -481,7 +476,7 @@ impl KSMFileDebug {
 
             if show_raw_instr {
                 match instr {
-                    kerbalobjects::ksmfile::Instr::ZeroOp(opcode) => {
+                    Instr::ZeroOp(opcode) => {
                         write!(
                             stream,
                             "{:x} {:<width$} {:<width$}",
@@ -491,23 +486,23 @@ impl KSMFileDebug {
                             width = addr_width * 2
                         )?;
                     }
-                    kerbalobjects::ksmfile::Instr::OneOp(opcode, op1) => {
+                    Instr::OneOp(opcode, op1) => {
                         write!(
                             stream,
                             "{:x} {:0>width$x} {:<width$}",
                             u8::from(*opcode),
-                            op1,
+                            usize::from(*op1),
                             "",
                             width = addr_width * 2
                         )?;
                     }
-                    kerbalobjects::ksmfile::Instr::TwoOp(opcode, op1, op2) => {
+                    Instr::TwoOp(opcode, op1, op2) => {
                         write!(
                             stream,
                             "{:x} {:0>width$x} {:0>width$x}",
                             u8::from(*opcode),
-                            op1,
-                            op2,
+                            usize::from(*op1),
+                            usize::from(*op2),
                             width = addr_width * 2
                         )?;
                     }
@@ -523,23 +518,26 @@ impl KSMFileDebug {
             stream.set_color(regular_color)?;
 
             match instr {
-                kerbalobjects::ksmfile::Instr::ZeroOp(_) => {}
-                kerbalobjects::ksmfile::Instr::OneOp(_, op1) => {
+                Instr::ZeroOp(_) => {}
+                Instr::OneOp(_, op1) => {
                     let val1 = self.value_from_operand(*op1).ok_or(format!(
                         "Instruction number {} references invalid argument index: {:x}",
-                        in_func_index, op1
+                        in_func_index,
+                        usize::from(*op1)
                     ))?;
 
                     super::write_kosvalue(stream, val1, regular_color, variable_color)?;
                 }
-                kerbalobjects::ksmfile::Instr::TwoOp(_, op1, op2) => {
+                Instr::TwoOp(_, op1, op2) => {
                     let val1 = self.value_from_operand(*op1).ok_or(format!(
                         "Instruction number {} references invalid argument index: {:x}",
-                        in_func_index, op1
+                        in_func_index,
+                        usize::from(*op1)
                     ))?;
                     let val2 = self.value_from_operand(*op2).ok_or(format!(
                         "Instruction number {} references invalid argument index: {:x}",
-                        in_func_index, op2
+                        in_func_index,
+                        usize::from(*op2)
                     ))?;
 
                     super::write_kosvalue(stream, val1, regular_color, variable_color)?;
@@ -550,40 +548,38 @@ impl KSMFileDebug {
                 }
             }
 
-            writeln!(stream, "")?;
+            writeln!(stream)?;
         }
 
         Ok((index, addr))
     }
 
     fn instr_size(&self, instr: &Instr) -> usize {
-        let addr_width = self.ksmfile.arg_section().num_index_bytes() as usize;
+        let addr_width = self.ksmfile.arg_section.num_index_bytes() as usize;
 
         match instr {
-            kerbalobjects::ksmfile::Instr::ZeroOp(_) => 1,
-            kerbalobjects::ksmfile::Instr::OneOp(_, _) => 1 + addr_width,
-            kerbalobjects::ksmfile::Instr::TwoOp(_, _, _) => 1 + addr_width * 2,
+            Instr::ZeroOp(_) => 1,
+            Instr::OneOp(_, _) => 1 + addr_width,
+            Instr::TwoOp(_, _, _) => 1 + addr_width * 2,
         }
     }
 
     fn max_debug_line_number(&self) -> isize {
         let mut max = 0;
 
-        for debug_entry in self.ksmfile.debug_section().debug_entries() {
-            if debug_entry.line_number() > max {
-                max = debug_entry.line_number();
-            }
+        for debug_entry in self.ksmfile.debug_section.debug_entries() {
+            max = max.max(debug_entry.line_number);
         }
 
         max
     }
 
     fn find_entry_with_addr(&self, addr: usize) -> Option<(&DebugEntry, &DebugRange)> {
-        let debug_section = self.ksmfile.debug_section();
+        let debug_section = &self.ksmfile.debug_section;
 
         for debug_entry in debug_section.debug_entries() {
             for debug_range in debug_entry.ranges() {
-                if addr >= debug_range.start() && addr <= debug_range.end() {
+                if addr >= debug_range.start && addr <= debug_range.end {
                     return Some((debug_entry, debug_range));
                 }
             }
@@ -592,8 +588,8 @@ impl KSMFileDebug {
         None
     }
 
-    fn value_from_operand(&self, op: usize) -> Option<&KOSValue> {
-        self.ksmfile.arg_section().get(op)
+    fn value_from_operand(&self, op: ArgIndex) -> Option<&KOSValue> {
+        self.ksmfile.arg_section.get(op)
     }
 
     fn dump_argument_section(
@@ -603,8 +599,8 @@ impl KSMFileDebug {
         type_color: &ColorSpec,
         variable_color: &ColorSpec,
     ) -> DumpResult {
-        let arg_section = self.ksmfile.arg_section();
-        let addr_width = arg_section.num_index_bytes();
+        let arg_section = &self.ksmfile.arg_section;
+        let addr_width = arg_section.num_index_bytes() as usize;
 
         stream.set_color(regular_color)?;
 
@@ -635,44 +631,45 @@ impl KSMFileDebug {
 
             stream.set_color(type_color)?;
             match value {
-                kerbalobjects::KOSValue::Null => {
-                    writeln!(stream, "NULL")?;
+                KOSValue::Null => {
+                    write!(stream, "NULL")?;
+                    stream.set_color(regular_color)?;
                 }
-                kerbalobjects::KOSValue::Bool(b) => {
+                KOSValue::Bool(b) => {
                     write!(stream, "{:<12}", "BOOL")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{}", if *b { "true" } else { "false" })?;
                 }
-                kerbalobjects::KOSValue::Byte(b) => {
+                KOSValue::Byte(b) => {
                     write!(stream, "{:<12}", "BYTE")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{}", b)?;
                 }
-                kerbalobjects::KOSValue::Int16(i) => {
+                KOSValue::Int16(i) => {
                     write!(stream, "{:<12}", "INT16")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{}", i)?;
                 }
-                kerbalobjects::KOSValue::Int32(i) => {
+                KOSValue::Int32(i) => {
                     write!(stream, "{:<12}", "INT32")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{}", i)?;
                 }
-                kerbalobjects::KOSValue::Float(f) => {
+                KOSValue::Float(f) => {
                     write!(stream, "{:<12}", "FLOAT")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{:.5}", f)?;
                 }
-                kerbalobjects::KOSValue::Double(d) => {
+                KOSValue::Double(d) => {
                     write!(stream, "{:<12}", "DOUBLE")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{:.5}", d)?;
                 }
-                kerbalobjects::KOSValue::String(s) => {
+                KOSValue::String(s) => {
                     write!(stream, "{:<12.80}", "STRING")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "\"")?;
-                    if s.starts_with("$") {
+                    if s.starts_with('$') {
                         stream.set_color(variable_color)?;
                     } else {
                         stream.set_color(regular_color)?;
@@ -681,27 +678,28 @@ impl KSMFileDebug {
                     stream.set_color(regular_color)?;
                     write!(stream, "\"")?;
                 }
-                kerbalobjects::KOSValue::ArgMarker => {
+                KOSValue::ArgMarker => {
                     write!(stream, "{:<12}", "ARGMARKER")?;
+                    stream.set_color(regular_color)?;
                 }
-                kerbalobjects::KOSValue::ScalarInt(i) => {
+                KOSValue::ScalarInt(i) => {
                     write!(stream, "{:<12}", "SCALARINT")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{}", i)?;
                 }
-                kerbalobjects::KOSValue::ScalarDouble(d) => {
+                KOSValue::ScalarDouble(d) => {
                     write!(stream, "{:<12}", "SCALARDOUBLE")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{}", d)?;
                 }
-                kerbalobjects::KOSValue::BoolValue(b) => {
+                KOSValue::BoolValue(b) => {
                     write!(stream, "{:<12}", "SCALARDOUBLE")?;
                     stream.set_color(regular_color)?;
                     write!(stream, "{}", if *b { "true" } else { "false" })?;
                 }
-                kerbalobjects::KOSValue::StringValue(s) => {
+                KOSValue::StringValue(s) => {
                     write!(stream, "{:<12.80}", "STRINGVALUE")?;
-                    if s.starts_with("$") {
+                    if s.starts_with('$') {
                         stream.set_color(variable_color)?;
                     } else {
                         stream.set_color(regular_color)?;
@@ -709,7 +707,7 @@ impl KSMFileDebug {
                     write!(stream, "\"{}\"", s)?;
                 }
             }
-            writeln!(stream, "")?;
+            writeln!(stream)?;
         }
 
         Ok(())
