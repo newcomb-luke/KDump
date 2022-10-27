@@ -12,5 +12,5 @@ readme = "README.md"
 clap = { version = "4.0.18", features = ["derive"] }
 termcolor = "1.1"
 # kerbalobjects = { path = "../kerbalobjects.rs" }
-kerbalobjects = { git = "https://github.com/newcomb-luke/kerbalobjects.rs/", branch = "hotfix/reld_api" }
+kerbalobjects = { git = "https://github.com/newcomb-luke/kerbalobjects.rs/", branch = "develop" }
 flate2 = "1.0"

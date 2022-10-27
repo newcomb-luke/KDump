@@ -1,12 +1,12 @@
 # KDump
 
-[<img src="https://img.shields.io/badge/github-newcomb--luke%2FKDump-8da0cb?style=for-the-badge&logo=github&labelColor=555555" alt="github" height="20">](https://github.com/newcomb-luke/KDump)
-[<img src="https://img.shields.io/crates/v/kdump?color=fc8d62&logo=rust&style=for-the-badge" alt="github" height="20">](https://crates.io/crates/kdump)
-[<img alt="License" src="https://img.shields.io/github/license/newcomb-luke/KDump?style=for-the-badge" height="20">]()
+[<img src="https://img.shields.io/badge/github-newcomb--luke%2FKDump-8da0cb?style=for-the-badge&logo=github&labelColor=555555" alt="github" height="24">](https://github.com/newcomb-luke/KDump)
+[<img src="https://img.shields.io/crates/v/kdump?color=fc8d62&logo=rust&style=for-the-badge" alt="github" height="24">](https://crates.io/crates/kdump)
+[<img alt="License" src="https://img.shields.io/github/license/newcomb-luke/KDump?style=for-the-badge" height="24">]()
 
-[<img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/newcomb-luke/KDump/Rust%20CI?style=for-the-badge" height="20">]()
-[<img alt="Libraries.io dependency status for GitHub repo" src="https://img.shields.io/librariesio/github/newcomb-luke/KDump?style=for-the-badge" height="20">](https://deps.rs/repo/github/newcomb-luke/KDump)
-[<img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/kdump?style=for-the-badge" height="20">]()
+[<img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/newcomb-luke/KDump/Rust%20CI?style=for-the-badge" height="24">]()
+[<img alt="Libraries.io dependency status for GitHub repo" src="https://img.shields.io/librariesio/github/newcomb-luke/KDump?style=for-the-badge" height="24">](https://deps.rs/repo/github/newcomb-luke/KDump)
+[<img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/kdump?style=for-the-badge" height="24">]()
 
 KDump is a program that allows anyone with a command line to view the contents of KerboScript Machine Code (KSM) files, and KerbalObject (KO) files to view compiled code for Kerbal Operating System. KO and KSM files are fully supported.
 
