@@ -12,7 +12,7 @@ KDump is a program that allows anyone with a command line to view the contents o
 
 KDump is the kOS equivalent to ELF's **objdump** or **readelf** programs.
 
-![screenshot](https://github.com/newcomb-luke/KDump/images/screenshot.png)
+![screenshot](https://github.com/newcomb-luke/KDump/images/kdump.png)
 
 ## Features
 
