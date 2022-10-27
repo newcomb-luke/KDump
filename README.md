@@ -24,6 +24,30 @@ KDump is the kOS equivalent to ELF's **objdump** or **readelf** programs.
 
 KDump can either be installed via [cargo](https://github.com/rust-lang/cargo) through [crates.io](https://crates.io), or as a standalone binary.
 
+#### Windows
+
+- Download the installer .msi file from Releases on the right
+- Run the installer
+- **kdump** should now be added to your PATH and available from any CMD or Powershell window
+
+#### Arch Linux
+
+* Download the PKGBUILD from Releases on the right
+
+* Copy it to a temporary folder
+
+* Run `makepkg -si` to install the **kdump** and all of its dependencies.
+
+* **kdump** should now be added to your PATH and available from any terminal
+
+#### Standalone Executables
+
+- Download and extract the .zip file from Releases on the right
+- Place the executable in the desired location
+- Run the executable through the terminal, Powershell on Windows or the default terminal on Mac OS or Linux.
+
+#### Cargo
+
 To install using **cargo**:
 
 ```
@@ -31,18 +55,6 @@ cargo install kdump
 ```
 
 `kdump` should then be added to your shell's PATH, and can be run from any terminal
-
-To install using the standalone binaries:
-
-* Download and extract the .zip file from Releases on the right
-* Place the executable in the desired location
-* Run the executable through the terminal, Powershell on Windows or the default terminal on Mac OS or Linux.
-
-To install using the Windows installer:
-
-* Download the installer .msi file from Releases on the right
-* Run the installer
-* `kdump` should now be added to your PATH and available from any CMD or Powershell window
 
 ## Usage
 
