@@ -18,43 +18,43 @@ pub fn kosvalue_str(value: &KOSValue) -> String {
     let mut s = String::new();
 
     match value {
-        kerbalobjects::KOSValue::Null => {
-            s.push_str("#");
+        KOSValue::Null => {
+            s.push('#');
         }
-        kerbalobjects::KOSValue::Bool(b) => {
+        KOSValue::Bool(b) => {
             s.push_str(if *b { "true" } else { "false" });
         }
-        kerbalobjects::KOSValue::Byte(b) => {
+        KOSValue::Byte(b) => {
             s = format!("{}", b);
         }
-        kerbalobjects::KOSValue::Int16(i) => {
+        KOSValue::Int16(i) => {
             s = format!("{}", i);
         }
-        kerbalobjects::KOSValue::Int32(i) => {
+        KOSValue::Int32(i) => {
             s = format!("{}", i);
         }
-        kerbalobjects::KOSValue::Float(f) => {
+        KOSValue::Float(f) => {
             s = format!("{:.5}", f);
         }
-        kerbalobjects::KOSValue::Double(d) => {
+        KOSValue::Double(d) => {
             s = format!("{:.5}", d);
         }
-        kerbalobjects::KOSValue::String(v) => {
+        KOSValue::String(v) => {
             s = v.clone();
         }
-        kerbalobjects::KOSValue::ArgMarker => {
-            s.push_str("@");
+        KOSValue::ArgMarker => {
+            s.push('@');
         }
-        kerbalobjects::KOSValue::ScalarInt(i) => {
+        KOSValue::ScalarInt(i) => {
             s = format!("{}", i);
         }
-        kerbalobjects::KOSValue::ScalarDouble(d) => {
+        KOSValue::ScalarDouble(d) => {
             s = format!("{:.5}", d);
         }
-        kerbalobjects::KOSValue::BoolValue(b) => {
+        KOSValue::BoolValue(b) => {
             s.push_str(if *b { "true" } else { "false" });
         }
-        kerbalobjects::KOSValue::StringValue(v) => {
+        KOSValue::StringValue(v) => {
             s = v.clone();
         }
     }
@@ -78,7 +78,7 @@ fn write_kosvalue(
         _ => false,
     };
 
-    let is_variable = is_string && str_value.starts_with("$");
+    let is_variable = is_string && str_value.starts_with('$');
 
     if is_string {
         write!(stream, "\"")?;
