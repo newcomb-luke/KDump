@@ -1,17 +1,16 @@
 [package]
 name = "kdump"
-version = "1.6.11"
+version = "2.0.0"
 authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0"
 description = "A small utility that disassembles and reads KSM and KO files for use with KerbalOS."
 homepage = "https://github.com/newcomb-luke/KDump"
 readme = "README.md"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-clap = "~2.34.0"
+clap = { version = "4.0.18", features = ["derive"] }
 termcolor = "1.1"
-kerbalobjects = "3.1.13"
+# kerbalobjects = { path = "../kerbalobjects.rs" }
+kerbalobjects = { git = "https://github.com/newcomb-luke/kerbalobjects.rs/", branch = "hotfix/reld_api" }
 flate2 = "1.0"
