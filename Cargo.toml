@@ -11,7 +11,7 @@ readme = "README.md"
 [dependencies]
 clap = { version = "4.0.18", features = ["derive"] }
 termcolor = "1.1"
-kerbalobjects = "4.0"
+kerbalobjects = "4.0.2"
 flate2 = "1.0"
 
 [profile.dist]
