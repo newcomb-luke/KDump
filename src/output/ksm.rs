@@ -48,22 +48,9 @@ impl KSMFileDebug {
     }
 
     fn get_info(&self) -> String {
-        match self.ksmfile.arg_section.arguments().next() {
-            Some(value) => {
-                match value {
-                    KOSValue::String(s) => {
-                        // If it is either a label that is used for reset or a KS formatted function name
-                        if s.starts_with('@') || s.contains('`') {
-                            String::from("Compiled using official kOS compiler.")
-                        } else {
-                            s.to_string()
-                        }
-                    }
-                    _ => String::from("Unknown compiler 2"),
-                }
-            }
-            None => String::from("Unknown compiler"),
-        }
+        let value = self.ksmfile.arg_section.arguments().next();
+
+        get_info(value)
     }
 
     fn dump_debug(&self, stream: &mut StandardStream) -> DumpResult {
@@ -644,5 +631,46 @@ impl KSMFileDebug {
         }
 
         Ok(())
+    }
+}
+
+fn get_info(value: Option<&KOSValue>) -> String {
+    match value {
+        Some(value) => {
+            match value {
+                KOSValue::String(s) => {
+                    // If it is either a label that is used for reset or a KS formatted function name
+                    if s.starts_with('@') || s.contains('`') {
+                        String::from("Compiled using official kOS compiler.")
+                    } else {
+                        s.to_string()
+                    }
+                }
+                _ => String::from("Unknown compiler 2"),
+            }
+        }
+        None => String::from("Unknown compiler"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::output::ksm::get_info;
+    use kerbalobjects::KOSValue;
+
+    #[test]
+    fn official_info() {
+        let value = KOSValue::String(String::from("@0001"));
+        assert_eq!(
+            get_info(Some(&value)),
+            String::from("Compiled using official kOS compiler.")
+        );
+    }
+
+    #[test]
+    fn arbitrary_info() {
+        let info = String::from("My favorite compiler");
+        let value = KOSValue::String(info.clone());
+        assert_eq!(get_info(Some(&value)), info);
     }
 }
