@@ -348,150 +348,110 @@ impl KOFileDebug {
             match instr {
                 kerbalobjects::ko::Instr::ZeroOp(_) => {}
                 kerbalobjects::ko::Instr::OneOp(_, op1) => {
-                    // If this operand has a relocation entry
-                    if relocs.0 .0 {
-                        let symtab = symtab_opt
-                            .ok_or("Instruction requires symbol, but symbol table not found")?;
-                        let symstrtab = symstrtab_opt.ok_or(
-                            "Instruction requires symbol, but symbol string table not found",
-                        )?;
-
-                        let sym1 = symtab.get(relocs.0 .1).ok_or(format!(
-                            "Reld entry symbol index invalid: {}",
-                            u32::from(relocs.0 .1)
-                        ))?;
-
-                        let sym1_name = symstrtab.get(sym1.name_idx).ok_or(format!(
-                            "Symbol has invalid name index: {}",
-                            u32::from(sym1.name_idx)
-                        ))?;
-
-                        match sym1.sym_type {
-                            kerbalobjects::ko::symbols::SymType::Func => {
-                                stream.set_color(&GREEN)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::Section => {
-                                stream.set_color(&PURPLE)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::NoType => {
-                                stream.set_color(&LIGHT_RED)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        // This instruction has a regular value
-                        let value = data_section.get(*op1).ok_or(format!(
-                            "Instruction data index invalid: {}",
-                            u32::from(*op1)
-                        ))?;
-
-                        super::write_kosvalue(stream, value)?;
-                    }
+                    Self::dump_operand(
+                        stream,
+                        &(relocs.0),
+                        symtab_opt,
+                        symstrtab_opt,
+                        data_section,
+                        *op1,
+                    )?;
                 }
                 kerbalobjects::ko::Instr::TwoOp(_, op1, op2) => {
-                    // If this operand has a relocation entry
-                    if relocs.0 .0 {
-                        let symtab = symtab_opt
-                            .ok_or("Instruction requires symbol, but symbol table not found")?;
-                        let symstrtab = symstrtab_opt.ok_or(
-                            "Instruction requires symbol, but symbol string table not found",
-                        )?;
-
-                        let sym1 = symtab.get(relocs.0 .1).ok_or(format!(
-                            "Reld entry symbol index invalid: {}",
-                            u32::from(relocs.0 .1)
-                        ))?;
-
-                        let sym1_name = symstrtab.get(sym1.name_idx).ok_or(format!(
-                            "Symbol has invalid name index: {}",
-                            u32::from(sym1.name_idx)
-                        ))?;
-
-                        match sym1.sym_type {
-                            kerbalobjects::ko::symbols::SymType::Func => {
-                                stream.set_color(&GREEN)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::Section => {
-                                stream.set_color(&PURPLE)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::NoType => {
-                                stream.set_color(&LIGHT_RED)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        // This instruction has a regular value
-                        let value = data_section.get(*op1).ok_or(format!(
-                            "Instruction data index invalid: {}",
-                            u32::from(*op1)
-                        ))?;
-
-                        super::write_kosvalue(stream, value)?;
-                    }
+                    Self::dump_operand(
+                        stream,
+                        &(relocs.0),
+                        symtab_opt,
+                        symstrtab_opt,
+                        data_section,
+                        *op1,
+                    )?;
 
                     write!(stream, ", ")?;
 
-                    // If this operand has a relocation entry
-                    if relocs.1 .0 {
-                        let symtab = symtab_opt
-                            .ok_or("Instruction requires symbol, but symbol table not found")?;
-                        let symstrtab = symstrtab_opt.ok_or(
-                            "Instruction requires symbol, but symbol string table not found",
-                        )?;
-
-                        let sym2 = symtab.get(relocs.1 .1).ok_or(format!(
-                            "Reld entry symbol index invalid: {}",
-                            u32::from(relocs.1 .1)
-                        ))?;
-
-                        let sym2_name = symstrtab.get(sym2.name_idx).ok_or(format!(
-                            "Symbol has invalid name index: {}",
-                            u32::from(sym2.name_idx)
-                        ))?;
-
-                        match sym2.sym_type {
-                            kerbalobjects::ko::symbols::SymType::Func => {
-                                stream.set_color(&GREEN)?;
-                                write!(stream, "<{}>", sym2_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::Section => {
-                                stream.set_color(&PURPLE)?;
-                                write!(stream, "<{}>", sym2_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::NoType => {
-                                stream.set_color(&LIGHT_RED)?;
-                                write!(stream, "<{}>", sym2_name)?;
-                                stream.set_color(&NO_COLOR)?;
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        // This instruction has a regular value
-                        let value = data_section.get(*op2).ok_or(format!(
-                            "Instruction data index invalid: {}",
-                            u32::from(*op1)
-                        ))?;
-
-                        super::write_kosvalue(stream, value)?;
-                    }
+                    Self::dump_operand(
+                        stream,
+                        &(relocs.1),
+                        symtab_opt,
+                        symstrtab_opt,
+                        data_section,
+                        *op2,
+                    )?;
                 }
             }
 
             writeln!(stream)?;
+        }
+
+        Ok(())
+    }
+
+    fn dump_operand(
+        stream: &mut StandardStream,
+        reloc: &(bool, SymbolIdx),
+        symtab_opt: Option<&SymbolTable>,
+        symstrtab_opt: Option<&StringTable>,
+        data_section: &DataSection,
+        operand: DataIdx,
+    ) -> DumpResult {
+        // If this operand has a relocation entry
+        if reloc.0 {
+            Self::dump_relocated_operand(stream, reloc, symtab_opt, symstrtab_opt)?;
+        } else {
+            // This operand has a regular value
+            let value = data_section.get(operand).ok_or(format!(
+                "Instruction data index invalid: {}",
+                u32::from(operand)
+            ))?;
+
+            super::write_kosvalue(stream, value)?;
+        }
+
+        Ok(())
+    }
+
+    fn dump_relocated_operand(
+        stream: &mut StandardStream,
+        reloc: &(bool, SymbolIdx),
+        symtab_opt: Option<&SymbolTable>,
+        symstrtab_opt: Option<&StringTable>,
+    ) -> DumpResult {
+        let symtab = symtab_opt.ok_or("Instruction requires symbol, but symbol table not found")?;
+        let symstrtab = symstrtab_opt
+            .ok_or("Instruction requires symbol, but symbol string table not found")?;
+
+        let sym1 = symtab.get(reloc.1).ok_or(format!(
+            "Reld entry symbol index invalid: {}",
+            u32::from(reloc.1)
+        ))?;
+
+        let sym1_name = symstrtab.get(sym1.name_idx).ok_or(format!(
+            "Symbol has invalid name index: {}",
+            u32::from(sym1.name_idx)
+        ))?;
+
+        match sym1.sym_type {
+            kerbalobjects::ko::symbols::SymType::Func => {
+                stream.set_color(&GREEN)?;
+                write!(stream, "<{}>", sym1_name)?;
+                stream.set_color(&NO_COLOR)?;
+            }
+            kerbalobjects::ko::symbols::SymType::Section => {
+                stream.set_color(&PURPLE)?;
+                write!(stream, "<{}>", sym1_name)?;
+                stream.set_color(&NO_COLOR)?;
+            }
+            kerbalobjects::ko::symbols::SymType::NoType => {
+                stream.set_color(&LIGHT_RED)?;
+                write!(stream, "<{}>", sym1_name)?;
+                stream.set_color(&NO_COLOR)?;
+            }
+            kerbalobjects::ko::symbols::SymType::File => {
+                return Err("Instruction refers to File symbol type".into());
+            }
+            kerbalobjects::ko::symbols::SymType::Object => {
+                return Err("Instruction refers to Object symbol type".into());
+            }
         }
 
         Ok(())
