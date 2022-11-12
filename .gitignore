@@ -17,3 +17,4 @@ Cargo.lock
 *.idea
 
 !tests/inputs/*.ksm
+!tests/inputs/*.ko
