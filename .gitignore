@@ -15,3 +15,5 @@ Cargo.lock
 
 *.vim
 *.idea
+
+!tests/inputs/*.ksm
