@@ -639,7 +639,7 @@ impl KOFileDebug {
 
                     writeln!(
                         stream,
-                        "{:<16}{:<10}{:<8}{:<10}{:<10}Section",
+                        "{:<16} {:<10}{:<8}{:<10}{:<10}Section",
                         "Name", "Value", "Size", "Binding", "Type"
                     )?;
 
@@ -649,10 +649,10 @@ impl KOFileDebug {
                         match symbol_name {
                             Some(symbol_name) => {
                                 stream.set_color(name_color)?;
-                                write!(stream, "{:<16.16}", symbol_name)?;
+                                write!(stream, "{:<16.16} ", symbol_name)?;
                             }
                             None => {
-                                write!(stream, "{:<16}", "")?;
+                                write!(stream, "{:<16} ", "")?;
                             }
                         }
 
