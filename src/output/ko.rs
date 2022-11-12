@@ -256,7 +256,6 @@ impl KOFileDebug {
         Ok(false)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn dump_func_sections(
         &self,
         stream: &mut StandardStream,
@@ -491,7 +490,6 @@ impl KOFileDebug {
         (first_reloc, second_reloc)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn dump_symbols(&self, stream: &mut StandardStream) -> DumpResult {
         stream.set_color(&NO_COLOR)?;
         writeln!(stream, "\nSymbol Tables:")?;
