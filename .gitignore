@@ -11,6 +11,10 @@ Cargo.lock
 
 *.ksm
 *.ko
+*.kasm
 
 *.vim
 *.idea
+
+!tests/inputs/*.ksm
+!tests/inputs/*.ko

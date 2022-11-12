@@ -2,6 +2,7 @@ use clap::Parser;
 use kerbalobjects::ko::KOFile;
 use kerbalobjects::ksm::KSMFile;
 use kerbalobjects::BufferIterator;
+use lazy_static::lazy_static;
 use std::io::Write;
 use std::path::PathBuf;
 use std::{error::Error, fs};
@@ -14,21 +15,58 @@ mod output;
 use output::KOFileDebug;
 use output::KSMFileDebug;
 
-pub static NO_COLOR: Color = Color::Rgb(255, 255, 255);
-
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub static WHITE_COLOR: Color = Color::Rgb(255, 255, 255);
 pub static ORANGE_COLOR: Color = Color::Rgb(201, 155, 87);
 pub static PURPLE_COLOR: Color = Color::Rgb(133, 80, 179);
 pub static DARK_RED_COLOR: Color = Color::Rgb(201, 87, 87);
 pub static LIGHT_RED_COLOR: Color = Color::Rgb(255, 147, 147);
 pub static GREEN_COLOR: Color = Color::Rgb(129, 181, 154);
 
-pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
-    let mut stream = StandardStream::stdout(termcolor::ColorChoice::Auto);
+lazy_static! {
+    static ref ORANGE: ColorSpec = {
+        let mut spec = ColorSpec::new();
+        spec.set_fg(Some(ORANGE_COLOR));
+        spec
+    };
+    static ref PURPLE: ColorSpec = {
+        let mut spec = ColorSpec::new();
+        spec.set_fg(Some(PURPLE_COLOR));
+        spec
+    };
+    static ref DARK_RED: ColorSpec = {
+        let mut spec = ColorSpec::new();
+        spec.set_fg(Some(DARK_RED_COLOR));
+        spec
+    };
+    static ref LIGHT_RED: ColorSpec = {
+        let mut spec = ColorSpec::new();
+        spec.set_fg(Some(LIGHT_RED_COLOR));
+        spec
+    };
+    static ref GREEN: ColorSpec = {
+        let mut spec = ColorSpec::new();
+        spec.set_fg(Some(GREEN_COLOR));
+        spec
+    };
+    static ref WHITE: ColorSpec = {
+        let mut spec = ColorSpec::new();
+        spec.set_fg(Some(WHITE_COLOR));
+        spec
+    };
+    static ref NO_COLOR: ColorSpec = ColorSpec::default();
+}
 
-    let mut no_color = ColorSpec::new();
-    no_color.set_fg(Some(NO_COLOR));
+pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
+    // We don't want color output if this is outputting to a file
+    let color_choice = if atty::is(atty::Stream::Stdout) {
+        termcolor::ColorChoice::Auto
+    } else {
+        termcolor::ColorChoice::Never
+    };
+
+    let mut stream = StandardStream::stdout(color_choice);
 
     writeln!(stream, "kDump version {}", VERSION)?;
 

@@ -7,16 +7,11 @@ use kerbalobjects::ko::{KOFile, SectionIdx};
 use kerbalobjects::KOSValue;
 use std::error::Error;
 use std::io::Write;
-use termcolor::ColorSpec;
 use termcolor::StandardStream;
 use termcolor::WriteColor;
 
 use crate::output::DynResult;
-use crate::CLIConfig;
-use crate::DARK_RED_COLOR;
-use crate::GREEN_COLOR;
-use crate::LIGHT_RED_COLOR;
-use crate::PURPLE_COLOR;
+use crate::{CLIConfig, DARK_RED, GREEN, LIGHT_RED, NO_COLOR, PURPLE};
 
 use super::DumpResult;
 
@@ -30,16 +25,6 @@ impl KOFileDebug {
     }
 
     pub fn dump(&self, stream: &mut StandardStream, config: &CLIConfig) -> DumpResult {
-        let no_color = ColorSpec::new();
-        let mut purple = ColorSpec::new();
-        purple.set_fg(Some(PURPLE_COLOR));
-        let mut light_red = ColorSpec::new();
-        light_red.set_fg(Some(LIGHT_RED_COLOR));
-        let mut green = ColorSpec::new();
-        green.set_fg(Some(GREEN_COLOR));
-        let mut dark_red = ColorSpec::new();
-        dark_red.set_fg(Some(DARK_RED_COLOR));
-
         if config.info {
             self.dump_info(stream)?;
         }
@@ -49,51 +34,33 @@ impl KOFileDebug {
         }
 
         if config.section_headers || config.all_headers {
-            self.dump_section_headers(stream, &no_color, &light_red, &green, &purple)?;
+            self.dump_section_headers(stream)?;
         }
 
         if config.stabs || config.full_contents {
-            self.dump_strtabs(stream, &no_color, &purple, &light_red)?;
+            self.dump_strtabs(stream)?;
         }
 
         if config.data || config.full_contents {
-            self.dump_data(stream, &no_color, &green, &light_red)?;
+            self.dump_data(stream)?;
         }
 
         if config.syms || config.full_contents {
-            self.dump_symbols(
-                stream, &no_color, &light_red, &purple, &purple, &green, &green, &no_color,
-            )?;
+            self.dump_symbols(stream)?;
         }
 
         if config.reloc || config.full_contents {
-            self.dump_relocs(stream, &no_color, &purple)?;
+            self.dump_relocs(stream)?;
         }
 
         if config.disassemble || config.full_contents {
-            self.dump_func_sections(
-                stream,
-                &no_color,
-                &purple,
-                &dark_red,
-                &light_red,
-                &green,
-                &purple,
-                !config.show_no_labels,
-                !config.show_no_raw_instr,
-            )?;
+            self.dump_func_sections(stream, !config.show_no_labels, !config.show_no_raw_instr)?;
         }
 
         if let Some(disassemble_symbol) = &config.disassemble_symbol {
             self.dump_func_by_symbol(
                 stream,
                 disassemble_symbol,
-                &no_color,
-                &purple,
-                &dark_red,
-                &light_red,
-                &green,
-                &purple,
                 !config.show_no_labels,
                 !config.show_no_raw_instr,
             )?;
@@ -116,13 +83,8 @@ impl KOFileDebug {
         Ok(name)
     }
 
-    fn dump_relocs(
-        &self,
-        stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        index_color: &ColorSpec,
-    ) -> DumpResult {
-        stream.set_color(regular_color)?;
+    fn dump_relocs(&self, stream: &mut StandardStream) -> DumpResult {
+        stream.set_color(&NO_COLOR)?;
 
         writeln!(stream, "\nRelocation data sections:")?;
 
@@ -138,7 +100,7 @@ impl KOFileDebug {
                     "Section", "Instruction", "Operand", "Symbol index"
                 )?;
 
-                stream.set_color(index_color)?;
+                stream.set_color(&PURPLE)?;
 
                 for reld_entry in reld_section.entries() {
                     writeln!(
@@ -158,17 +120,10 @@ impl KOFileDebug {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn dump_func_by_symbol(
         &self,
         stream: &mut StandardStream,
         symbol_text: &String,
-        regular_color: &ColorSpec,
-        index_color: &ColorSpec,
-        mnemonic_color: &ColorSpec,
-        variable_color: &ColorSpec,
-        func_color: &ColorSpec,
-        section_color: &ColorSpec,
         show_labels: bool,
         show_raw_instr: bool,
     ) -> DumpResult {
@@ -245,18 +200,7 @@ impl KOFileDebug {
 
         match func_section_found {
             Some(section) => {
-                self.dump_func_section(
-                    stream,
-                    regular_color,
-                    index_color,
-                    mnemonic_color,
-                    variable_color,
-                    func_color,
-                    section_color,
-                    show_labels,
-                    show_raw_instr,
-                    section,
-                )?;
+                self.dump_func_section(stream, show_labels, show_raw_instr, section)?;
             }
             None => {
                 writeln!(stream, "\nNo section found with that symbol.")?;
@@ -312,56 +256,31 @@ impl KOFileDebug {
         Ok(false)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn dump_func_sections(
         &self,
         stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        index_color: &ColorSpec,
-        mnemonic_color: &ColorSpec,
-        variable_color: &ColorSpec,
-        func_color: &ColorSpec,
-        section_color: &ColorSpec,
         show_labels: bool,
         show_raw_instr: bool,
     ) -> DumpResult {
-        stream.set_color(regular_color)?;
+        stream.set_color(&NO_COLOR)?;
 
         writeln!(stream, "\nFunction sections: ")?;
 
         for func_section in self.kofile.func_sections() {
-            self.dump_func_section(
-                stream,
-                regular_color,
-                index_color,
-                mnemonic_color,
-                variable_color,
-                func_color,
-                section_color,
-                show_labels,
-                show_raw_instr,
-                func_section,
-            )?;
+            self.dump_func_section(stream, show_labels, show_raw_instr, func_section)?;
         }
 
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn dump_func_section(
         &self,
         stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        index_color: &ColorSpec,
-        mnemonic_color: &ColorSpec,
-        variable_color: &ColorSpec,
-        func_color: &ColorSpec,
-        section_color: &ColorSpec,
         show_labels: bool,
         show_raw_instr: bool,
         func_section: &FuncSection,
     ) -> DumpResult {
-        stream.set_color(regular_color)?;
+        stream.set_color(&NO_COLOR)?;
 
         let sh_index = func_section.section_index();
 
@@ -381,9 +300,9 @@ impl KOFileDebug {
             write!(stream, "  ")?;
 
             if show_labels {
-                stream.set_color(index_color)?;
+                stream.set_color(&PURPLE)?;
                 write!(stream, "{:0>8x} ", i + 1)?;
-                stream.set_color(regular_color)?;
+                stream.set_color(&NO_COLOR)?;
             }
 
             let instr_opcode = if show_raw_instr {
@@ -419,159 +338,119 @@ impl KOFileDebug {
 
             let instr_mnemonic: &str = instr_opcode.into();
 
-            stream.set_color(mnemonic_color)?;
+            stream.set_color(&DARK_RED)?;
             write!(stream, " {:<5}", instr_mnemonic)?;
-            stream.set_color(regular_color)?;
+            stream.set_color(&NO_COLOR)?;
 
             let relocs = self.get_relocated(sh_index, InstrIdx::from(i));
 
             match instr {
                 kerbalobjects::ko::Instr::ZeroOp(_) => {}
                 kerbalobjects::ko::Instr::OneOp(_, op1) => {
-                    // If this operand has a relocation entry
-                    if relocs.0 .0 {
-                        let symtab = symtab_opt
-                            .ok_or("Instruction requires symbol, but symbol table not found")?;
-                        let symstrtab = symstrtab_opt.ok_or(
-                            "Instruction requires symbol, but symbol string table not found",
-                        )?;
-
-                        let sym1 = symtab.get(relocs.0 .1).ok_or(format!(
-                            "Reld entry symbol index invalid: {}",
-                            u32::from(relocs.0 .1)
-                        ))?;
-
-                        let sym1_name = symstrtab.get(sym1.name_idx).ok_or(format!(
-                            "Symbol has invalid name index: {}",
-                            u32::from(sym1.name_idx)
-                        ))?;
-
-                        match sym1.sym_type {
-                            kerbalobjects::ko::symbols::SymType::Func => {
-                                stream.set_color(func_color)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::Section => {
-                                stream.set_color(section_color)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::NoType => {
-                                stream.set_color(variable_color)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        // This instruction has a regular value
-                        let value = data_section.get(*op1).ok_or(format!(
-                            "Instruction data index invalid: {}",
-                            u32::from(*op1)
-                        ))?;
-
-                        super::write_kosvalue(stream, value, regular_color, variable_color)?;
-                    }
+                    Self::dump_operand(
+                        stream,
+                        &(relocs.0),
+                        symtab_opt,
+                        symstrtab_opt,
+                        data_section,
+                        *op1,
+                    )?;
                 }
                 kerbalobjects::ko::Instr::TwoOp(_, op1, op2) => {
-                    // If this operand has a relocation entry
-                    if relocs.0 .0 {
-                        let symtab = symtab_opt
-                            .ok_or("Instruction requires symbol, but symbol table not found")?;
-                        let symstrtab = symstrtab_opt.ok_or(
-                            "Instruction requires symbol, but symbol string table not found",
-                        )?;
-
-                        let sym1 = symtab.get(relocs.0 .1).ok_or(format!(
-                            "Reld entry symbol index invalid: {}",
-                            u32::from(relocs.0 .1)
-                        ))?;
-
-                        let sym1_name = symstrtab.get(sym1.name_idx).ok_or(format!(
-                            "Symbol has invalid name index: {}",
-                            u32::from(sym1.name_idx)
-                        ))?;
-
-                        match sym1.sym_type {
-                            kerbalobjects::ko::symbols::SymType::Func => {
-                                stream.set_color(func_color)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::Section => {
-                                stream.set_color(section_color)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::NoType => {
-                                stream.set_color(variable_color)?;
-                                write!(stream, "<{}>", sym1_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        // This instruction has a regular value
-                        let value = data_section.get(*op1).ok_or(format!(
-                            "Instruction data index invalid: {}",
-                            u32::from(*op1)
-                        ))?;
-
-                        super::write_kosvalue(stream, value, regular_color, variable_color)?;
-                    }
+                    Self::dump_operand(
+                        stream,
+                        &(relocs.0),
+                        symtab_opt,
+                        symstrtab_opt,
+                        data_section,
+                        *op1,
+                    )?;
 
                     write!(stream, ", ")?;
 
-                    // If this operand has a relocation entry
-                    if relocs.1 .0 {
-                        let symtab = symtab_opt
-                            .ok_or("Instruction requires symbol, but symbol table not found")?;
-                        let symstrtab = symstrtab_opt.ok_or(
-                            "Instruction requires symbol, but symbol string table not found",
-                        )?;
-
-                        let sym2 = symtab.get(relocs.1 .1).ok_or(format!(
-                            "Reld entry symbol index invalid: {}",
-                            u32::from(relocs.1 .1)
-                        ))?;
-
-                        let sym2_name = symstrtab.get(sym2.name_idx).ok_or(format!(
-                            "Symbol has invalid name index: {}",
-                            u32::from(sym2.name_idx)
-                        ))?;
-
-                        match sym2.sym_type {
-                            kerbalobjects::ko::symbols::SymType::Func => {
-                                stream.set_color(func_color)?;
-                                write!(stream, "<{}>", sym2_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::Section => {
-                                stream.set_color(section_color)?;
-                                write!(stream, "<{}>", sym2_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            kerbalobjects::ko::symbols::SymType::NoType => {
-                                stream.set_color(variable_color)?;
-                                write!(stream, "<{}>", sym2_name)?;
-                                stream.set_color(regular_color)?;
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        // This instruction has a regular value
-                        let value = data_section.get(*op2).ok_or(format!(
-                            "Instruction data index invalid: {}",
-                            u32::from(*op1)
-                        ))?;
-
-                        super::write_kosvalue(stream, value, regular_color, variable_color)?;
-                    }
+                    Self::dump_operand(
+                        stream,
+                        &(relocs.1),
+                        symtab_opt,
+                        symstrtab_opt,
+                        data_section,
+                        *op2,
+                    )?;
                 }
             }
 
             writeln!(stream)?;
+        }
+
+        Ok(())
+    }
+
+    fn dump_operand(
+        stream: &mut StandardStream,
+        reloc: &(bool, SymbolIdx),
+        symtab_opt: Option<&SymbolTable>,
+        symstrtab_opt: Option<&StringTable>,
+        data_section: &DataSection,
+        operand: DataIdx,
+    ) -> DumpResult {
+        // If this operand has a relocation entry
+        if reloc.0 {
+            Self::dump_relocated_operand(stream, reloc, symtab_opt, symstrtab_opt)?;
+        } else {
+            // This operand has a regular value
+            let value = data_section.get(operand).ok_or(format!(
+                "Instruction data index invalid: {}",
+                u32::from(operand)
+            ))?;
+
+            super::write_kosvalue(stream, value)?;
+        }
+
+        Ok(())
+    }
+
+    fn dump_relocated_operand(
+        stream: &mut StandardStream,
+        reloc: &(bool, SymbolIdx),
+        symtab_opt: Option<&SymbolTable>,
+        symstrtab_opt: Option<&StringTable>,
+    ) -> DumpResult {
+        let symtab = symtab_opt.ok_or("Instruction requires symbol, but symbol table not found")?;
+        let symstrtab = symstrtab_opt
+            .ok_or("Instruction requires symbol, but symbol string table not found")?;
+
+        let sym1 = symtab.get(reloc.1).ok_or(format!(
+            "Reld entry symbol index invalid: {}",
+            u32::from(reloc.1)
+        ))?;
+
+        let sym1_name = symstrtab.get(sym1.name_idx).ok_or(format!(
+            "Symbol has invalid name index: {}",
+            u32::from(sym1.name_idx)
+        ))?;
+
+        match sym1.sym_type {
+            kerbalobjects::ko::symbols::SymType::Func => {
+                stream.set_color(&GREEN)?;
+                write!(stream, "<{}>", sym1_name)?;
+                stream.set_color(&NO_COLOR)?;
+            }
+            kerbalobjects::ko::symbols::SymType::Section => {
+                stream.set_color(&PURPLE)?;
+                write!(stream, "<{}>", sym1_name)?;
+                stream.set_color(&NO_COLOR)?;
+            }
+            kerbalobjects::ko::symbols::SymType::NoType => {
+                stream.set_color(&LIGHT_RED)?;
+                write!(stream, "<{}>", sym1_name)?;
+                stream.set_color(&NO_COLOR)?;
+            }
+            kerbalobjects::ko::symbols::SymType::File => {
+                return Err("Instruction refers to File symbol type".into());
+            }
+            kerbalobjects::ko::symbols::SymType::Object => {
+                return Err("Instruction refers to Object symbol type".into());
+            }
         }
 
         Ok(())
@@ -611,19 +490,8 @@ impl KOFileDebug {
         (first_reloc, second_reloc)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn dump_symbols(
-        &self,
-        stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        name_color: &ColorSpec,
-        value_color: &ColorSpec,
-        size_color: &ColorSpec,
-        bind_color: &ColorSpec,
-        type_color: &ColorSpec,
-        index_color: &ColorSpec,
-    ) -> DumpResult {
-        stream.set_color(regular_color)?;
+    fn dump_symbols(&self, stream: &mut StandardStream) -> DumpResult {
+        stream.set_color(&NO_COLOR)?;
         writeln!(stream, "\nSymbol Tables:")?;
 
         let symstrtab_opt = self.kofile.str_tab_by_name(".symstrtab");
@@ -639,7 +507,7 @@ impl KOFileDebug {
 
                     writeln!(
                         stream,
-                        "{:<16}{:<10}{:<8}{:<10}{:<10}Section",
+                        "{:<16} {:<10}{:<8}{:<10}{:<10}Section",
                         "Name", "Value", "Size", "Binding", "Type"
                     )?;
 
@@ -648,18 +516,18 @@ impl KOFileDebug {
 
                         match symbol_name {
                             Some(symbol_name) => {
-                                stream.set_color(name_color)?;
-                                write!(stream, "{:<16.16}", symbol_name)?;
+                                stream.set_color(&LIGHT_RED)?;
+                                write!(stream, "{:<16.16} ", symbol_name)?;
                             }
                             None => {
-                                write!(stream, "{:<16}", "")?;
+                                write!(stream, "{:<16} ", "")?;
                             }
                         }
 
-                        stream.set_color(value_color)?;
+                        stream.set_color(&PURPLE)?;
                         write!(stream, "{:0>8x}  ", u32::from(symbol.value_idx))?;
 
-                        stream.set_color(size_color)?;
+                        stream.set_color(&PURPLE)?;
                         write!(stream, "{:0>4x}    ", symbol.size)?;
 
                         let bind_str = match symbol.sym_bind {
@@ -668,7 +536,7 @@ impl KOFileDebug {
                             kerbalobjects::ko::symbols::SymBind::Extern => "EXTERN",
                         };
 
-                        stream.set_color(bind_color)?;
+                        stream.set_color(&GREEN)?;
                         write!(stream, "{:<10}", bind_str)?;
 
                         let kind_str = match symbol.sym_type {
@@ -679,10 +547,10 @@ impl KOFileDebug {
                             kerbalobjects::ko::symbols::SymType::Section => "SECTION",
                         };
 
-                        stream.set_color(type_color)?;
+                        stream.set_color(&GREEN)?;
                         write!(stream, "{:<10}", kind_str)?;
 
-                        stream.set_color(index_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         writeln!(stream, "{}", u16::from(symbol.sh_idx))?;
                     }
                 }
@@ -695,14 +563,8 @@ impl KOFileDebug {
         Ok(())
     }
 
-    fn dump_data(
-        &self,
-        stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        type_color: &ColorSpec,
-        variable_color: &ColorSpec,
-    ) -> DumpResult {
-        stream.set_color(regular_color)?;
+    fn dump_data(&self, stream: &mut StandardStream) -> DumpResult {
+        stream.set_color(&NO_COLOR)?;
         writeln!(stream, "\nSymbol Data Sections:")?;
 
         for data_section in self.kofile.data_sections() {
@@ -716,80 +578,80 @@ impl KOFileDebug {
             for (i, value) in data_section.data().enumerate() {
                 write!(stream, "  {:<10}", i)?;
 
-                stream.set_color(type_color)?;
+                stream.set_color(&GREEN)?;
                 match value {
-                    kerbalobjects::KOSValue::Null => {
+                    KOSValue::Null => {
                         write!(stream, "NULL")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                     }
-                    kerbalobjects::KOSValue::Bool(b) => {
+                    KOSValue::Bool(b) => {
                         write!(stream, "{:<12}", "BOOL")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{}", if *b { "true" } else { "false" })?;
                     }
-                    kerbalobjects::KOSValue::Byte(b) => {
+                    KOSValue::Byte(b) => {
                         write!(stream, "{:<12}", "BYTE")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{}", b)?;
                     }
-                    kerbalobjects::KOSValue::Int16(i) => {
+                    KOSValue::Int16(i) => {
                         write!(stream, "{:<12}", "INT16")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{}", i)?;
                     }
-                    kerbalobjects::KOSValue::Int32(i) => {
+                    KOSValue::Int32(i) => {
                         write!(stream, "{:<12}", "INT32")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{}", i)?;
                     }
-                    kerbalobjects::KOSValue::Float(f) => {
+                    KOSValue::Float(f) => {
                         write!(stream, "{:<12}", "FLOAT")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{:.5}", f)?;
                     }
-                    kerbalobjects::KOSValue::Double(d) => {
+                    KOSValue::Double(d) => {
                         write!(stream, "{:<12}", "DOUBLE")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{:.5}", d)?;
                     }
-                    kerbalobjects::KOSValue::String(s) => {
+                    KOSValue::String(s) => {
                         write!(stream, "{:<12}", "STRING")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "\"")?;
                         if s.starts_with('$') {
-                            stream.set_color(variable_color)?;
+                            stream.set_color(&LIGHT_RED)?;
                         } else {
-                            stream.set_color(regular_color)?;
+                            stream.set_color(&NO_COLOR)?;
                         }
                         write!(stream, "{}", s)?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "\"")?;
                     }
-                    kerbalobjects::KOSValue::ArgMarker => {
+                    KOSValue::ArgMarker => {
                         write!(stream, "{:<12}", "ARGMARKER")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                     }
-                    kerbalobjects::KOSValue::ScalarInt(i) => {
+                    KOSValue::ScalarInt(i) => {
                         write!(stream, "{:<12}", "SCALARINT")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{}", i)?;
                     }
-                    kerbalobjects::KOSValue::ScalarDouble(d) => {
+                    KOSValue::ScalarDouble(d) => {
                         write!(stream, "{:<12}", "SCALARDOUBLE")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{}", d)?;
                     }
-                    kerbalobjects::KOSValue::BoolValue(b) => {
+                    KOSValue::BoolValue(b) => {
                         write!(stream, "{:<12}", "SCALARDOUBLE")?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                         write!(stream, "{}", if *b { "true" } else { "false" })?;
                     }
-                    kerbalobjects::KOSValue::StringValue(s) => {
+                    KOSValue::StringValue(s) => {
                         write!(stream, "{:<12}", "STRINGVALUE")?;
                         if s.starts_with('$') {
-                            stream.set_color(variable_color)?;
+                            stream.set_color(&LIGHT_RED)?;
                         } else {
-                            stream.set_color(regular_color)?;
+                            stream.set_color(&NO_COLOR)?;
                         }
                         write!(stream, "\"{}\"", s)?;
                     }
@@ -801,15 +663,8 @@ impl KOFileDebug {
         Ok(())
     }
 
-    fn dump_section_headers(
-        &self,
-        stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        name_color: &ColorSpec,
-        type_color: &ColorSpec,
-        size_color: &ColorSpec,
-    ) -> DumpResult {
-        stream.set_color(regular_color)?;
+    fn dump_section_headers(&self, stream: &mut StandardStream) -> DumpResult {
+        stream.set_color(&NO_COLOR)?;
         writeln!(stream, "\nSections:")?;
 
         writeln!(
@@ -820,18 +675,18 @@ impl KOFileDebug {
 
         for (i, header) in self.kofile.section_headers().enumerate() {
             write!(stream, "{:<7}", i)?;
-            stream.set_color(name_color)?;
+            stream.set_color(&LIGHT_RED)?;
             let name = self.get_section_name(SectionIdx::from(i as u16))?;
-            write!(stream, "{:<16}", name)?;
-            stream.set_color(type_color)?;
+            write!(stream, "{:<16.16} ", name)?;
+            stream.set_color(&GREEN)?;
             write!(
                 stream,
                 "{:<12}",
                 KOFileDebug::kind_as_str(header.section_kind)
             )?;
-            stream.set_color(size_color)?;
+            stream.set_color(&PURPLE)?;
             writeln!(stream, "{:<12}\n", header.size)?;
-            stream.set_color(regular_color)?;
+            stream.set_color(&NO_COLOR)?;
         }
 
         Ok(())
@@ -875,14 +730,8 @@ impl KOFileDebug {
         Ok(())
     }
 
-    fn dump_strtabs(
-        &self,
-        stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        index_color: &ColorSpec,
-        str_color: &ColorSpec,
-    ) -> DumpResult {
-        stream.set_color(regular_color)?;
+    fn dump_strtabs(&self, stream: &mut StandardStream) -> DumpResult {
+        stream.set_color(&NO_COLOR)?;
         writeln!(stream, "\nString tables:")?;
 
         for strtab in self.kofile.str_tabs() {
@@ -897,19 +746,19 @@ impl KOFileDebug {
             for s in strtab.strings().skip(1) {
                 write!(stream, "  [")?;
 
-                stream.set_color(index_color)?;
+                stream.set_color(&PURPLE)?;
 
                 write!(stream, "{:5}", index)?;
 
-                stream.set_color(regular_color)?;
+                stream.set_color(&NO_COLOR)?;
 
                 write!(stream, "]  ")?;
 
-                stream.set_color(str_color)?;
+                stream.set_color(&LIGHT_RED)?;
 
                 writeln!(stream, "{}", s)?;
 
-                stream.set_color(regular_color)?;
+                stream.set_color(&NO_COLOR)?;
 
                 index += s.len() + 1;
             }

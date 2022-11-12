@@ -1,10 +1,5 @@
-use crate::CLIConfig;
-use crate::DARK_RED_COLOR;
-use crate::GREEN_COLOR;
-use crate::LIGHT_RED_COLOR;
-// use crate::NO_COLOR;
-use crate::ORANGE_COLOR;
-use crate::PURPLE_COLOR;
+use crate::{CLIConfig, GREEN, LIGHT_RED, NO_COLOR};
+use crate::{DARK_RED, ORANGE, PURPLE};
 use kerbalobjects::ksm::sections::DebugEntry;
 use kerbalobjects::ksm::sections::DebugRange;
 use kerbalobjects::ksm::sections::{ArgIndex, CodeSection};
@@ -13,7 +8,6 @@ use kerbalobjects::ksm::KSMFile;
 use kerbalobjects::KOSValue;
 use kerbalobjects::Opcode;
 use std::io::Write;
-use termcolor::ColorSpec;
 use termcolor::StandardStream;
 use termcolor::WriteColor;
 
@@ -29,75 +23,38 @@ impl KSMFileDebug {
     }
 
     pub fn dump(&self, stream: &mut StandardStream, config: &CLIConfig) -> DumpResult {
-        let no_color = ColorSpec::new();
-        // no_color.set_fg(Some(NO_COLOR));
-        let mut purple = ColorSpec::new();
-        purple.set_fg(Some(PURPLE_COLOR));
-        let mut light_red = ColorSpec::new();
-        light_red.set_fg(Some(LIGHT_RED_COLOR));
-        let mut green = ColorSpec::new();
-        green.set_fg(Some(GREEN_COLOR));
-        let mut dark_red = ColorSpec::new();
-        dark_red.set_fg(Some(DARK_RED_COLOR));
-        let mut orange = ColorSpec::new();
-        orange.set_fg(Some(ORANGE_COLOR));
-
         if config.info {
             writeln!(stream, "\nKSM File Info:")?;
             writeln!(stream, "\t{}", self.get_info())?;
         }
 
         if config.argument_section || config.full_contents {
-            self.dump_argument_section(stream, &no_color, &green, &light_red)?;
+            self.dump_argument_section(stream)?;
         }
 
         if config.disassemble || config.full_contents {
-            self.dump_code_sections(
-                stream, config, &no_color, &orange, &purple, &dark_red, &light_red,
-            )?;
+            self.dump_code_sections(stream, config)?;
         }
 
         if let Some(disassemble_symbol) = &config.disassemble_symbol {
-            self.dump_code_by_symbol(
-                stream,
-                config,
-                disassemble_symbol,
-                &no_color,
-                &orange,
-                &purple,
-                &dark_red,
-                &light_red,
-            )?;
+            self.dump_code_by_symbol(stream, config, disassemble_symbol)?;
         }
 
         if config.full_contents {
-            self.dump_debug(stream, &no_color)?;
+            self.dump_debug(stream)?;
         }
 
         Ok(())
     }
 
     fn get_info(&self) -> String {
-        match self.ksmfile.arg_section.arguments().next() {
-            Some(value) => {
-                match value {
-                    KOSValue::String(s) => {
-                        // If it is either a label that is used for reset or a KS formatted function name
-                        if s.starts_with('@') || s.contains('`') {
-                            String::from("Compiled using official kOS compiler.")
-                        } else {
-                            s.to_string()
-                        }
-                    }
-                    _ => String::from("Unknown compiler 2"),
-                }
-            }
-            None => String::from("Unknown compiler"),
-        }
+        let value = self.ksmfile.arg_section.arguments().next();
+
+        get_info(value)
     }
 
-    fn dump_debug(&self, stream: &mut StandardStream, regular_color: &ColorSpec) -> DumpResult {
-        stream.set_color(regular_color)?;
+    fn dump_debug(&self, stream: &mut StandardStream) -> DumpResult {
+        stream.set_color(&NO_COLOR)?;
 
         writeln!(stream, "\nDebug section:")?;
 
@@ -137,17 +94,11 @@ impl KSMFileDebug {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn dump_code_by_symbol(
         &self,
         stream: &mut StandardStream,
         config: &CLIConfig,
         symbol: &String,
-        regular_color: &ColorSpec,
-        line_color: &ColorSpec,
-        label_color: &ColorSpec,
-        mnemonic_color: &ColorSpec,
-        variable_color: &ColorSpec,
     ) -> DumpResult {
         let mut index = 1;
         let mut addr = 0;
@@ -228,11 +179,6 @@ impl KSMFileDebug {
                     code_section,
                     index,
                     addr,
-                    regular_color,
-                    line_color,
-                    label_color,
-                    mnemonic_color,
-                    variable_color,
                     config.line_numbers,
                     !config.show_no_labels,
                     !config.show_no_raw_instr,
@@ -246,17 +192,7 @@ impl KSMFileDebug {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn dump_code_sections(
-        &self,
-        stream: &mut StandardStream,
-        config: &CLIConfig,
-        regular_color: &ColorSpec,
-        line_color: &ColorSpec,
-        label_color: &ColorSpec,
-        mnemonic_color: &ColorSpec,
-        variable_color: &ColorSpec,
-    ) -> DumpResult {
+    fn dump_code_sections(&self, stream: &mut StandardStream, config: &CLIConfig) -> DumpResult {
         let mut index = 1;
         let mut addr = 0;
 
@@ -267,11 +203,6 @@ impl KSMFileDebug {
                     code_section,
                     index,
                     addr,
-                    regular_color,
-                    line_color,
-                    label_color,
-                    mnemonic_color,
-                    variable_color,
                     config.line_numbers,
                     !config.show_no_labels,
                     !config.show_no_raw_instr,
@@ -299,11 +230,6 @@ impl KSMFileDebug {
         code_section: &CodeSection,
         start_index: i32,
         start_addr: usize,
-        regular_color: &ColorSpec,
-        line_color: &ColorSpec,
-        label_color: &ColorSpec,
-        mnemonic_color: &ColorSpec,
-        variable_color: &ColorSpec,
         show_line_numbers: bool,
         show_labels: bool,
         show_raw_instr: bool,
@@ -344,7 +270,7 @@ impl KSMFileDebug {
             }
         };
 
-        stream.set_color(regular_color)?;
+        stream.set_color(&NO_COLOR)?;
         writeln!(stream, "\n{}:", name)?;
 
         let mut label = String::from("@000001");
@@ -414,9 +340,9 @@ impl KSMFileDebug {
                             _ => "   ",
                         };
 
-                        stream.set_color(line_color)?;
+                        stream.set_color(&ORANGE)?;
                         write!(stream, "   {:>width$} {} ", num_str, art, width = max_width)?;
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                     }
                     None => {
                         write!(stream, "   {:>width$}     ", "", width = max_width)?;
@@ -435,7 +361,7 @@ impl KSMFileDebug {
             let is_lbrt = instr_opcode == Opcode::Lbrt;
 
             if show_labels {
-                stream.set_color(label_color)?;
+                stream.set_color(&PURPLE)?;
 
                 if is_lbrt {
                     write!(stream, "{:7} ", "")?;
@@ -444,7 +370,7 @@ impl KSMFileDebug {
                 }
             }
 
-            stream.set_color(regular_color)?;
+            stream.set_color(&NO_COLOR)?;
 
             if is_lbrt {
                 if let &Instr::OneOp(_, op) = instr {
@@ -509,13 +435,13 @@ impl KSMFileDebug {
                 }
             }
 
-            stream.set_color(mnemonic_color)?;
+            stream.set_color(&DARK_RED)?;
 
             let mnemonic: &str = instr_opcode.into();
 
             write!(stream, "  {:<6}", mnemonic)?;
 
-            stream.set_color(regular_color)?;
+            stream.set_color(&NO_COLOR)?;
 
             match instr {
                 Instr::ZeroOp(_) => {}
@@ -526,7 +452,7 @@ impl KSMFileDebug {
                         usize::from(*op1)
                     ))?;
 
-                    super::write_kosvalue(stream, val1, regular_color, variable_color)?;
+                    super::write_kosvalue(stream, val1)?;
                 }
                 Instr::TwoOp(_, op1, op2) => {
                     let val1 = self.value_from_operand(*op1).ok_or(format!(
@@ -540,11 +466,11 @@ impl KSMFileDebug {
                         usize::from(*op2)
                     ))?;
 
-                    super::write_kosvalue(stream, val1, regular_color, variable_color)?;
+                    super::write_kosvalue(stream, val1)?;
 
                     write!(stream, ",")?;
 
-                    super::write_kosvalue(stream, val2, regular_color, variable_color)?;
+                    super::write_kosvalue(stream, val2)?;
                 }
             }
 
@@ -592,17 +518,11 @@ impl KSMFileDebug {
         self.ksmfile.arg_section.get(op)
     }
 
-    fn dump_argument_section(
-        &self,
-        stream: &mut StandardStream,
-        regular_color: &ColorSpec,
-        type_color: &ColorSpec,
-        variable_color: &ColorSpec,
-    ) -> DumpResult {
+    fn dump_argument_section(&self, stream: &mut StandardStream) -> DumpResult {
         let arg_section = &self.ksmfile.arg_section;
         let addr_width = arg_section.num_index_bytes() as usize;
 
-        stream.set_color(regular_color)?;
+        stream.set_color(&NO_COLOR)?;
 
         writeln!(stream, "\nArgument section:")?;
 
@@ -621,7 +541,7 @@ impl KSMFileDebug {
         let mut index = 3;
 
         for value in arg_section.arguments() {
-            stream.set_color(regular_color)?;
+            stream.set_color(&NO_COLOR)?;
 
             let index_str = format!("  {:0>width$x}", index, width = addr_width * 2);
 
@@ -629,80 +549,80 @@ impl KSMFileDebug {
 
             index += value.size_bytes();
 
-            stream.set_color(type_color)?;
+            stream.set_color(&GREEN)?;
             match value {
                 KOSValue::Null => {
                     write!(stream, "NULL")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                 }
                 KOSValue::Bool(b) => {
                     write!(stream, "{:<12}", "BOOL")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{}", if *b { "true" } else { "false" })?;
                 }
                 KOSValue::Byte(b) => {
                     write!(stream, "{:<12}", "BYTE")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{}", b)?;
                 }
                 KOSValue::Int16(i) => {
                     write!(stream, "{:<12}", "INT16")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{}", i)?;
                 }
                 KOSValue::Int32(i) => {
                     write!(stream, "{:<12}", "INT32")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{}", i)?;
                 }
                 KOSValue::Float(f) => {
                     write!(stream, "{:<12}", "FLOAT")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{:.5}", f)?;
                 }
                 KOSValue::Double(d) => {
                     write!(stream, "{:<12}", "DOUBLE")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{:.5}", d)?;
                 }
                 KOSValue::String(s) => {
                     write!(stream, "{:<12.80}", "STRING")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "\"")?;
                     if s.starts_with('$') {
-                        stream.set_color(variable_color)?;
+                        stream.set_color(&LIGHT_RED)?;
                     } else {
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                     }
                     write!(stream, "{}", s)?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "\"")?;
                 }
                 KOSValue::ArgMarker => {
                     write!(stream, "{:<12}", "ARGMARKER")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                 }
                 KOSValue::ScalarInt(i) => {
                     write!(stream, "{:<12}", "SCALARINT")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{}", i)?;
                 }
                 KOSValue::ScalarDouble(d) => {
                     write!(stream, "{:<12}", "SCALARDOUBLE")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{}", d)?;
                 }
                 KOSValue::BoolValue(b) => {
                     write!(stream, "{:<12}", "SCALARDOUBLE")?;
-                    stream.set_color(regular_color)?;
+                    stream.set_color(&NO_COLOR)?;
                     write!(stream, "{}", if *b { "true" } else { "false" })?;
                 }
                 KOSValue::StringValue(s) => {
                     write!(stream, "{:<12.80}", "STRINGVALUE")?;
                     if s.starts_with('$') {
-                        stream.set_color(variable_color)?;
+                        stream.set_color(&LIGHT_RED)?;
                     } else {
-                        stream.set_color(regular_color)?;
+                        stream.set_color(&NO_COLOR)?;
                     }
                     write!(stream, "\"{}\"", s)?;
                 }
@@ -711,5 +631,46 @@ impl KSMFileDebug {
         }
 
         Ok(())
+    }
+}
+
+fn get_info(value: Option<&KOSValue>) -> String {
+    match value {
+        Some(value) => {
+            match value {
+                KOSValue::String(s) => {
+                    // If it is either a label that is used for reset or a KS formatted function name
+                    if s.starts_with('@') || s.contains('`') {
+                        String::from("Compiled using official kOS compiler.")
+                    } else {
+                        s.to_string()
+                    }
+                }
+                _ => String::from("Unknown compiler 2"),
+            }
+        }
+        None => String::from("Unknown compiler"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::output::ksm::get_info;
+    use kerbalobjects::KOSValue;
+
+    #[test]
+    fn official_info() {
+        let value = KOSValue::String(String::from("@0001"));
+        assert_eq!(
+            get_info(Some(&value)),
+            String::from("Compiled using official kOS compiler.")
+        );
+    }
+
+    #[test]
+    fn arbitrary_info() {
+        let info = String::from("My favorite compiler");
+        let value = KOSValue::String(info.clone());
+        assert_eq!(get_info(Some(&value)), info);
     }
 }

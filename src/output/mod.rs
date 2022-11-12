@@ -1,7 +1,6 @@
 use kerbalobjects::KOSValue;
 use std::error::Error;
 use std::io::Write;
-use termcolor::ColorSpec;
 use termcolor::StandardStream;
 use termcolor::WriteColor;
 
@@ -12,6 +11,7 @@ mod ko;
 pub use ko::KOFileDebug;
 
 mod ksm;
+use crate::{LIGHT_RED, NO_COLOR};
 pub use ksm::KSMFileDebug;
 
 pub fn kosvalue_str(value: &KOSValue) -> String {
@@ -62,12 +62,7 @@ pub fn kosvalue_str(value: &KOSValue) -> String {
     s
 }
 
-fn write_kosvalue(
-    stream: &mut StandardStream,
-    value: &KOSValue,
-    regular_color: &ColorSpec,
-    variable_color: &ColorSpec,
-) -> DumpResult {
+fn write_kosvalue(stream: &mut StandardStream, value: &KOSValue) -> DumpResult {
     let mut str_value = "";
 
     let is_string = match value {
@@ -85,13 +80,13 @@ fn write_kosvalue(
     }
 
     if is_variable {
-        stream.set_color(variable_color)?;
+        stream.set_color(&LIGHT_RED)?;
     }
 
     write!(stream, "{}", kosvalue_str(value))?;
 
     if is_string {
-        stream.set_color(regular_color)?;
+        stream.set_color(&NO_COLOR)?;
         write!(stream, "\"")?;
     }
 
