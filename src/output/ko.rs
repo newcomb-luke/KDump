@@ -677,7 +677,7 @@ impl KOFileDebug {
             write!(stream, "{:<7}", i)?;
             stream.set_color(&LIGHT_RED)?;
             let name = self.get_section_name(SectionIdx::from(i as u16))?;
-            write!(stream, "{:<16}", name)?;
+            write!(stream, "{:<16.16} ", name)?;
             stream.set_color(&GREEN)?;
             write!(
                 stream,
