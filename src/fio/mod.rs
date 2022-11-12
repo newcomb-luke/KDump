@@ -12,6 +12,11 @@ pub enum FileType {
 
 /// Determines the type of a file using the raw bytes
 pub fn determine_file_type(contents: &[u8]) -> Result<FileType, Box<dyn Error>> {
+
+    if contents.len() < 4 {
+        return Err("Error: Provided a file that is less than 4 bytes long".into());
+    }
+
     if is_gzip(contents) {
         let mut decoder = GzDecoder::new(contents);
         let mut decompressed = [0, 0, 0, 0];

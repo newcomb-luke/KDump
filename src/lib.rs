@@ -25,7 +25,14 @@ pub static LIGHT_RED_COLOR: Color = Color::Rgb(255, 147, 147);
 pub static GREEN_COLOR: Color = Color::Rgb(129, 181, 154);
 
 pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
-    let mut stream = StandardStream::stdout(termcolor::ColorChoice::Auto);
+    // We don't want color output if this is outputting to a file
+    let color_choice = if atty::is(atty::Stream::Stdout) {
+        termcolor::ColorChoice::Auto
+    } else {
+        termcolor::ColorChoice::Never
+    };
+
+    let mut stream = StandardStream::stdout(color_choice);
 
     let mut no_color = ColorSpec::new();
     no_color.set_fg(Some(NO_COLOR));
