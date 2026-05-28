@@ -5,6 +5,7 @@ use flate2::read::GzDecoder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
+    GZippedKerbalMachineCode,
     KerbalMachineCode,
     KerbalObject,
     Unknown,
@@ -23,8 +24,10 @@ pub fn determine_file_type(contents: &[u8]) -> Result<FileType, Box<dyn Error>> 
         decoder.read_exact(&mut decompressed)?;
 
         if is_ksm(&decompressed) {
-            return Ok(FileType::KerbalMachineCode);
+            return Ok(FileType::GZippedKerbalMachineCode);
         }
+    } else if is_ksm(contents) {
+        return Ok(FileType::KerbalMachineCode);
     } else if is_ko(contents) {
         return Ok(FileType::KerbalObject);
     }
