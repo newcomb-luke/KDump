@@ -76,8 +76,16 @@ pub fn run(config: &CLIConfig) -> Result<(), Box<dyn Error>> {
     let file_type = determine_file_type(&raw_contents)?;
 
     match file_type {
+        FileType::GZippedKerbalMachineCode => {
+            let ksm = KSMFile::parse_gzipped(&mut raw_contents_iter)?;
+            let ksm_debug = KSMFileDebug::new(ksm);
+
+            ksm_debug.dump(&mut stream, config)?;
+
+            Ok(())
+        }
         FileType::KerbalMachineCode => {
-            let ksm = KSMFile::parse(&mut raw_contents_iter)?;
+            let ksm = KSMFile::parse_raw(&mut raw_contents_iter)?;
             let ksm_debug = KSMFileDebug::new(ksm);
 
             ksm_debug.dump(&mut stream, config)?;
